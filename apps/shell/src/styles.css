@@ -1,0 +1,5 @@
+@import "@baymeister/ui/styles.css";
+
+/* Tailwind має сканувати і каркас, і всі модулі — інакше класи з пакетів зникнуть. */
+@source "../../../packages/ui/src";
+@source "../../../packages/modules";

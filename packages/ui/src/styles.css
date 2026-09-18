@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Дизайн-токени Baymeister.
+ *
+ * Модулі не оголошують власних кольорів — тільки ці токени. Це єдина причина,
+ * чому сімнадцять блоків, написаних різними людьми, виглядають як один продукт.
+ */
+:root {
+  --bm-ground: #f3f5f6;
+  --bm-surface: #ffffff;
+  --bm-surface-2: #eaeef0;
+  --bm-ink: #13181c;
+  --bm-ink-muted: #4c5862;
+  --bm-ink-faint: #6d7a85;
+  --bm-border: #d7dee2;
+  --bm-border-strong: #c2ccd2;
+
+  --bm-accent: #0f6e78;
+  --bm-accent-hover: #0b565e;
+  --bm-accent-soft: #e2f0f1;
+  --bm-on-accent: #ffffff;
+
+  --bm-ready: #1c7f47;
+  --bm-ready-soft: #e1f1e7;
+  --bm-wip: #8a5f07;
+  --bm-wip-soft: #f6ecd8;
+  --bm-planned: #6f7c86;
+  --bm-planned-soft: #e6eaec;
+  --bm-danger: #b3261e;
+  --bm-danger-soft: #fae9e8;
+
+  --bm-radius: 0.375rem;
+}
+
+.dark {
+  --bm-ground: #0e1216;
+  --bm-surface: #161b20;
+  --bm-surface-2: #1d242a;
+  --bm-ink: #e4eaee;
+  --bm-ink-muted: #9eabb5;
+  --bm-ink-faint: #7c8994;
+  --bm-border: #283138;
+  --bm-border-strong: #35414a;
+
+  --bm-accent: #45aeb8;
+  --bm-accent-hover: #7fcbd3;
+  --bm-accent-soft: #123036;
+  --bm-on-accent: #0e1216;
+
+  --bm-ready: #46b075;
+  --bm-ready-soft: #12291d;
+  --bm-wip: #c9a13c;
+  --bm-wip-soft: #2a2214;
+  --bm-planned: #84939d;
+  --bm-planned-soft: #222a30;
+  --bm-danger: #e5766d;
+  --bm-danger-soft: #2b1715;
+}
+
+@theme inline {
+  --color-ground: var(--bm-ground);
+  --color-surface: var(--bm-surface);
+  --color-surface-2: var(--bm-surface-2);
+  --color-ink: var(--bm-ink);
+  --color-ink-muted: var(--bm-ink-muted);
+  --color-ink-faint: var(--bm-ink-faint);
+  --color-line: var(--bm-border);
+  --color-line-strong: var(--bm-border-strong);
+
+  --color-accent: var(--bm-accent);
+  --color-accent-hover: var(--bm-accent-hover);
+  --color-accent-soft: var(--bm-accent-soft);
+  --color-on-accent: var(--bm-on-accent);
+
+  --color-ready: var(--bm-ready);
+  --color-ready-soft: var(--bm-ready-soft);
+  --color-wip: var(--bm-wip);
+  --color-wip-soft: var(--bm-wip-soft);
+  --color-planned: var(--bm-planned);
+  --color-planned-soft: var(--bm-planned-soft);
+  --color-danger: var(--bm-danger);
+  --color-danger-soft: var(--bm-danger-soft);
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-cond: "Fira Sans Condensed", "IBM Plex Sans", ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-bm: var(--bm-radius);
+}
+
+@layer base {
+  * {
+    border-color: var(--bm-border);
+  }
+
+  body {
+    background-color: var(--bm-ground);
+    color: var(--bm-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--bm-accent);
+    outline-offset: 2px;
+  }
+
+  /* Цифри в таблицях мають вирівнюватись по розрядах. */
+  table, .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
