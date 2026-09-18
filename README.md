@@ -10,11 +10,18 @@ CRM для автосервісу. Монорепозиторій: фронте�
 ```bash
 corepack enable pnpm
 pnpm install
-pnpm dev
+pnpm dev                      # каркас на http://localhost:5173
 ```
 
-Каркас підніметься на http://localhost:5173. Бекенда поки немає; запити на
-`/api` проксіюються на `localhost:8000`, де очікується gateway.
+Разом із бекендом готового блоку:
+
+```bash
+docker compose up -d postgres rabbitmq
+cd services/customers && uv sync --group dev && uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8001
+```
+
+У дев-режимі роль gateway виконує проксі Vite: `/api/customers` → `:8001`.
 
 ## Структура
 
@@ -27,6 +34,12 @@ services/*             бекенд-сервіси на FastAPI, по одном
 contracts/*.yaml       OpenAPI-специфікації, публічні інтерфейси блоків
 docs/                  архітектура й опис окремих блоків
 ```
+
+## Еталонний блок
+
+`customers` доведений до кінця і слугує зразком: контракт, сервіс,
+фронтенд-модуль, тести, документація. Опис — [`docs/customers.md`](docs/customers.md).
+Беручись за свій блок, копіюйте його структуру, а не вигадуйте власну.
 
 ## Як додати блок
 

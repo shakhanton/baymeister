@@ -1,0 +1,279 @@
+openapi: 3.1.0
+
+info:
+  title: Baymeister — Клієнти
+  version: 1.0.0
+  description: |
+    Блок `customers`. Володіє клієнтами автосервісу: фізичними та юридичними
+    особами, їхніми контактами й історією звернень.
+
+    Цей файл — публічний інтерфейс блоку. Він мерджиться раніше за реалізацію;
+    з нього генерується типізований клієнт для фронтенду.
+
+    Що блок НЕ віддає: автомобілі клієнта (блок `vehicles`), наряди
+    (блок `work-orders`). Ці блоки зберігають `customer_id` у себе і слухають
+    подію `customer.updated`, щоб оновити власну копію імені й телефону.
+
+servers:
+  - url: /api
+    description: |
+      Gateway маршрутизує за першим сегментом шляху: усе під /api/customers
+      потрапляє в цей сервіс. Кожен блок володіє власним префіксом.
+
+tags:
+  - name: customers
+    description: Клієнти
+  - name: health
+    description: Службові
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Перевірка живості сервісу
+      security: []
+      responses:
+        "200":
+          description: Сервіс живий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /customers:
+    get:
+      tags: [customers]
+      operationId: listCustomers
+      summary: Список клієнтів
+      parameters:
+        - name: search
+          in: query
+          description: Пошук за іменем, телефоном або податковим номером
+          schema: { type: string, maxLength: 120 }
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/CustomerType" }
+        - name: archived
+          in: query
+          description: Показати архівованих замість активних
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Сторінка результатів
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+    post:
+      tags: [customers]
+      operationId: createCustomer
+      summary: Створити клієнта
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerCreate" }
+      responses:
+        "201":
+          description: Клієнта створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "409":
+          description: Клієнт із таким телефоном уже існує
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /customers/{customerId}:
+    parameters:
+      - $ref: "#/components/parameters/CustomerId"
+
+    get:
+      tags: [customers]
+      operationId: getCustomer
+      summary: Клієнт за ідентифікатором
+      responses:
+        "200":
+          description: Клієнт
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+    patch:
+      tags: [customers]
+      operationId: updateCustomer
+      summary: Змінити клієнта
+      description: Передаються тільки поля, що змінюються.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerUpdate" }
+      responses:
+        "200":
+          description: Оновлений клієнт
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Телефон зайнятий іншим клієнтом
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /customers/{customerId}/archive:
+    parameters:
+      - $ref: "#/components/parameters/CustomerId"
+    post:
+      tags: [customers]
+      operationId: archiveCustomer
+      summary: Архівувати клієнта
+      description: |
+        М'яке видалення. Клієнт зникає зі списків, але лишається доступним за
+        ідентифікатором — наряди й автомобілі на нього посилаються.
+      responses:
+        "200":
+          description: Архівований клієнт
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен видає блок `identity`, перевіряє gateway.
+
+  parameters:
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Немає або недійсний токен
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Клієнта не знайдено
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Дані не пройшли валідацію
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    CustomerType:
+      type: string
+      enum: [individual, company]
+      description: |
+        `individual` — фізична особа, `company` — юридична.
+
+    Customer:
+      type: object
+      required:
+        [id, type, name, phone, discount_percent, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/CustomerType" }
+        name:
+          type: string
+          description: ПІБ для фізособи, назва для компанії
+          examples: ["Петренко Іван Миколайович"]
+        phone:
+          type: string
+          description: У форматі E.164
+          examples: ["+380671234567"]
+        email:
+          type: [string, "null"]
+          format: email
+        tax_id:
+          type: [string, "null"]
+          description: ЄДРПОУ або РНОКПП
+        notes:
+          type: [string, "null"]
+        discount_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 0
+        archived_at:
+          type: [string, "null"]
+          format: date-time
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CustomerCreate:
+      type: object
+      required: [type, name, phone]
+      properties:
+        type: { $ref: "#/components/schemas/CustomerType" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        phone: { type: string, pattern: "^\\+[1-9][0-9]{7,14}$" }
+        email: { type: [string, "null"], format: email }
+        tax_id: { type: [string, "null"], maxLength: 20 }
+        notes: { type: [string, "null"], maxLength: 2000 }
+        discount_percent: { type: number, minimum: 0, maximum: 100, default: 0 }
+
+    CustomerUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        type: { $ref: "#/components/schemas/CustomerType" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        phone: { type: string, pattern: "^\\+[1-9][0-9]{7,14}$" }
+        email: { type: [string, "null"], format: email }
+        tax_id: { type: [string, "null"], maxLength: 20 }
+        notes: { type: [string, "null"], maxLength: 2000 }
+        discount_percent: { type: number, minimum: 0, maximum: 100 }
+
+    CustomerPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Customer" }
+        total: { type: integer, description: Усього записів за фільтром }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Повідомлення, придатне для показу користувачу
+          examples: ["Клієнт із телефоном +380671234567 уже існує"]
+
+security:
+  - bearerAuth: []

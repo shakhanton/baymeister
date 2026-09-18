@@ -7,8 +7,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Усі запити до бекенда йдуть через gateway, ніколи напряму в сервіс.
-      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+      // У дев-режимі роль gateway виконує цей проксі: маршрутизує за першим
+      // сегментом шляху і зрізає /api. Кожен новий блок додає сюди рядок,
+      // поки не з'явиться справжній gateway на :8000.
+      '/api/customers': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
     },
   },
 });

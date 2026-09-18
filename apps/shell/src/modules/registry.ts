@@ -1,5 +1,6 @@
 import type { AppModule } from '@baymeister/module-kit';
 import { assertRegistryIsValid } from '@baymeister/module-kit';
+import { customersModule } from '@baymeister/module-customers';
 
 /**
  * Реєстр модулів — єдине джерело правди про склад продукту.
@@ -51,16 +52,7 @@ export const registry: AppModule[] = [
   },
 
   // ── Довідники ───────────────────────────────────────────────────────────
-  {
-    id: 'customers',
-    title: 'Клієнти',
-    icon: 'users',
-    status: 'planned',
-    nav: { group: 'catalog', order: 10 },
-    permissions: ['customers.read'],
-    routes: [],
-    description: 'Клієнти фіз. і юр. осіб, контакти, історія звернень, сегменти.',
-  },
+  customersModule,
   {
     id: 'vehicles',
     title: 'Автомобілі',
