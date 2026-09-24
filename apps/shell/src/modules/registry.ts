@@ -3,6 +3,7 @@ import { assertRegistryIsValid } from '@baymeister/module-kit';
 import { catalogModule } from '@baymeister/module-catalog';
 import { customersModule } from '@baymeister/module-customers';
 import { identityModule } from '@baymeister/module-identity';
+import { schedulingModule } from '@baymeister/module-scheduling';
 import { vehiclesModule } from '@baymeister/module-vehicles';
 
 /**
@@ -23,16 +24,7 @@ import { vehiclesModule } from '@baymeister/module-vehicles';
  */
 export const registry: AppModule[] = [
   // ── Операції ────────────────────────────────────────────────────────────
-  {
-    id: 'scheduling',
-    title: 'Планувальник',
-    icon: 'calendar-days',
-    status: 'planned',
-    nav: { group: 'operations', order: 10 },
-    permissions: ['scheduling.read'],
-    routes: [],
-    description: 'Записи, пости й підйомники, завантаження механіків, онлайн-бронювання.',
-  },
+  schedulingModule,
   {
     id: 'work-orders',
     title: 'Наряд-замовлення',
