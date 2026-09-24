@@ -4,6 +4,7 @@ import { catalogModule } from '@baymeister/module-catalog';
 import { customersModule } from '@baymeister/module-customers';
 import { identityModule } from '@baymeister/module-identity';
 import { inventoryModule } from '@baymeister/module-inventory';
+import { procurementModule } from '@baymeister/module-procurement';
 import { schedulingModule } from '@baymeister/module-scheduling';
 import { vehiclesModule } from '@baymeister/module-vehicles';
 import { workOrdersModule } from '@baymeister/module-work-orders';
@@ -46,16 +47,7 @@ export const registry: AppModule[] = [
 
   // ── Склад ───────────────────────────────────────────────────────────────
   inventoryModule,
-  {
-    id: 'procurement',
-    title: 'Закупівлі',
-    icon: 'truck',
-    status: 'planned',
-    nav: { group: 'warehouse', order: 20 },
-    permissions: ['procurement.read'],
-    routes: [],
-    description: 'Постачальники, замовлення по API, прибуткові накладні.',
-  },
+  procurementModule,
 
   // ── Фінанси ─────────────────────────────────────────────────────────────
   {

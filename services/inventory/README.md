@@ -22,7 +22,7 @@ uv run uvicorn app.main:app --reload --port 8007
 ## Перевірки
 
 ```bash
-uv run pytest        # 14 тестів, SQLite у пам'яті, шина й catalog підмінені
+uv run pytest        # 17 тестів, SQLite у пам'яті, шина й catalog підмінені
 uv run ruff check .
 uv run mypy app
 ```
@@ -35,7 +35,7 @@ app/db.py              сесія SQLAlchemy, власна схема
 app/models.py          items, lots, reservations, movements; UtcDateTime
 app/money.py           гроші й кількість: Decimal усередині, рядок назовні
 app/stock.py           залишки з партій, прихід, списання FIFO — вся арифметика
-app/handlers.py        реакції на події catalog і work-orders
+app/handlers.py        реакції на події catalog, work-orders і procurement
 app/consumer.py        слухач черги inventory.events: обробка → коміт → ack
 app/catalog_client.py  читання деталі з catalog для приходу
 app/events.py          публікація подій у шину
