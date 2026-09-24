@@ -42,7 +42,7 @@ const auth: Middleware = {
   },
 };
 
-function makeClient<T extends {}>() {
+function makeClient<T extends object>() {
   const client = createClient<T>({ baseUrl: BASE_URL });
   client.use(auth);
   return client;

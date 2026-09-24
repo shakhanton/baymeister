@@ -5,3 +5,5 @@ packages:
 
 allowBuilds:
   esbuild: true
+  # Нативний резолвер для eslint-plugin-import-x ставиться готовим бінарником.
+  unrs-resolver: false
