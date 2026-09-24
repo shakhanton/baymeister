@@ -13,15 +13,54 @@ pnpm install
 pnpm dev                      # каркас на http://localhost:5173
 ```
 
-Разом із бекендом готового блоку:
+Каркас пускає тільки після входу, тому для роботи потрібні три сервіси:
+`identity` (вхід), `gateway` (єдина точка входу) і бекенд блоку.
 
 ```bash
 docker compose up -d postgres rabbitmq
-cd services/customers && uv sync --group dev && uv run alembic upgrade head
-uv run uvicorn app.main:app --reload --port 8001
+
+cd services/identity && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head && uv run python -m app.bootstrap
+uv run uvicorn app.main:app --reload --port 8002          # окремий термінал
+
+cd services/customers && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8001          # окремий термінал
+
+cd services/vehicles && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8003          # окремий термінал
+
+cd services/catalog && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8004          # окремий термінал
+
+cd services/scheduling && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8005          # окремий термінал
+
+cd services/work-orders && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8006          # окремий термінал
+
+cd services/inventory && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8007          # окремий термінал
+
+cd services/procurement && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8008          # окремий термінал
+
+cd services/gateway && uv sync --group dev
+uv run uvicorn app.main:app --reload --port 8000          # окремий термінал
 ```
 
-У дев-режимі роль gateway виконує проксі Vite: `/api/customers` → `:8001`.
+Вхід — `owner@example.com` / `change-me-please` (задається в
+`services/identity/.env`). Дев-сервер Vite проксіює `/api` на gateway `:8000`.
+
+> Postgres створює бази блоків тільки на порожньому томі. Якщо том лишився
+> з часів, коли баз нових блоків ще не було:
+> `docker compose exec postgres createdb -U baymeister identity` (і так само `vehicles`, `catalog`, `scheduling`, `work_orders`, `inventory`, `procurement`).
 
 ## Структура
 
@@ -30,6 +69,7 @@ apps/shell/            каркас: меню, маршрути, авториз�
 packages/ui/           дизайн-система — токени й базові компоненти
 packages/module-kit/   контракт між каркасом і блоками (тип AppModule)
 packages/modules/*     фронтенд-модулі блоків, по одному на виконавця
+services/gateway/      єдина точка входу: перевірка токена, маршрутизація
 services/*             бекенд-сервіси на FastAPI, по одному на блок
 contracts/*.yaml       OpenAPI-специфікації, публічні інтерфейси блоків
 docs/                  архітектура й опис окремих блоків
@@ -50,7 +90,9 @@ docs/                  архітектура й опис окремих бло�
 1. **Контракт першим.** Описати `contracts/<блок>.yaml` (OpenAPI 3.1) і
    змерджити окремим PR до початку реалізації.
 2. **Сервіс.** `services/<блок>/` — FastAPI, власна схема в PostgreSQL. У чужі
-   таблиці не ходити: тільки через API або події.
+   таблиці не ходити: тільки через API або події. Права перевіряти через
+   `app/api/auth.py` (скопіювати з `customers`); підключити блок у gateway —
+   рядок у `UPSTREAMS`.
 3. **Фронтенд-модуль.** `packages/modules/<блок>/` з маніфестом:
 
    ```ts

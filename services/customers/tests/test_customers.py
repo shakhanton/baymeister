@@ -1,5 +1,7 @@
 from httpx import AsyncClient
 
+from tests.conftest import as_user
+
 PETRENKO = {
     "type": "individual",
     "name": "Петренко Іван Миколайович",
@@ -129,3 +131,23 @@ async def test_pagination_reports_total_beyond_the_page(client: AsyncClient) -> 
     assert body["total"] == 5
     assert len(body["items"]) == 2
     assert body["offset"] == 2
+
+
+async def test_request_without_gateway_headers_is_401(client: AsyncClient) -> None:
+    anonymous = {"X-User-Id": "", "X-User-Role": "", "X-User-Permissions": ""}
+    response = await client.get("/customers", headers=anonymous)
+    assert response.status_code == 401
+
+
+async def test_read_only_user_cannot_change_customers(client: AsyncClient) -> None:
+    created = (await client.post("/customers", json=PETRENKO)).json()
+    mechanic = as_user("customers.read,work_orders.read")
+
+    assert (await client.get("/customers", headers=mechanic)).status_code == 200
+
+    create = await client.post("/customers", json=PETRENKO, headers=mechanic)
+    assert create.status_code == 403
+    assert "customers.write" in create.json()["detail"]
+
+    archive = await client.post(f"/customers/{created['id']}/archive", headers=mechanic)
+    assert archive.status_code == 403

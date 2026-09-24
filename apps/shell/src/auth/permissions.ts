@@ -1,50 +1,114 @@
+import {
+  identityApi,
+  setTokenProvider,
+  setUnauthorizedHandler,
+  type IdentitySchemas,
+} from '@baymeister/api-client';
 import { create } from 'zustand';
 
-export interface CurrentUser {
-  id: string;
-  name: string;
-  role: string;
-  /** Список прав. '*' означає повний доступ. */
-  permissions: string[];
-}
+export type CurrentUser = IdentitySchemas['schemas']['Me'];
+
+type Status = 'restoring' | 'anonymous' | 'authenticated';
 
 interface AuthState {
+  status: Status;
   user: CurrentUser | null;
-  setUser: (user: CurrentUser | null) => void;
+  token: string | null;
+}
+
+const TOKEN_KEY = 'bm-token';
+
+function readToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Приватний режим браузера: сесія проживе до перезавантаження вкладки.
+  }
 }
 
 /**
- * ЗАГЛУШКА ФАЗИ 0.
+ * Сесія каркаса.
  *
- * Поки блок `identity` не готовий, каркас працює під вигаданим власником із
- * повним доступом. Коли identity стане `ready`, цей об'єкт замінюється
- * відповіддю /api/identity/me, а решта каркаса не змінюється — вона вже читає
- * користувача через usePermissions.
+ * Токен видає identity, перевіряє gateway. Каркас лише зберігає токен і питає
+ * /identity/me, хто він такий. Модулі сесії не бачать — токен у запити
+ * підставляє api-client, а права каркас передає через usePermissions.
  */
-const DEV_USER: CurrentUser = {
-  id: 'dev',
-  name: 'Власник',
-  role: 'owner',
-  permissions: ['*'],
-};
+export const useAuth = create<AuthState>(() => {
+  const token = readToken();
+  return { status: token ? 'restoring' : 'anonymous', user: null, token };
+});
 
-export const useAuth = create<AuthState>((set) => ({
-  user: DEV_USER,
-  setUser: (user) => set({ user }),
-}));
+setTokenProvider(() => useAuth.getState().token);
+setUnauthorizedHandler(() => logout());
+
+/** Відновити сесію після перезавантаження сторінки. */
+export async function restoreSession(): Promise<void> {
+  if (!useAuth.getState().token) return;
+
+  try {
+    const { data, response } = await identityApi.GET('/identity/me');
+    if (data) {
+      useAuth.setState({ status: 'authenticated', user: data });
+      return;
+    }
+    if (response.status === 401) {
+      logout();
+      return;
+    }
+  } catch {
+    // Мережа або gateway лежить — нижче.
+  }
+  // Сервер недоступний, а не відмовив: токен лишається, наступне
+  // перезавантаження сторінки спробує ще раз.
+  useAuth.setState({ status: 'anonymous', user: null });
+}
+
+export async function login(email: string, password: string): Promise<void> {
+  const result = await identityApi
+    .POST('/identity/auth/login', { body: { email, password } })
+    .catch(() => {
+      throw new Error('Сервер недоступний. Спробуйте за хвилину.');
+    });
+  const { data, error } = result;
+  if (!data) throw new Error(error?.detail ?? 'Не вдалося увійти');
+
+  writeToken(data.access_token);
+  useAuth.setState({ status: 'authenticated', user: data.user, token: data.access_token });
+}
+
+export function logout(): void {
+  writeToken(null);
+  useAuth.setState({ status: 'anonymous', user: null, token: null });
+}
+
+function allows(user: CurrentUser | null, required: string[]): boolean {
+  if (!user) return false;
+  if (user.permissions.includes('*')) return true;
+  return required.every((p) => user.permissions.includes(p));
+}
 
 /** Чи має поточний користувач усі перелічені права. */
 export function usePermissions(required: string[]): boolean {
   const user = useAuth((s) => s.user);
-  if (!user) return false;
-  if (user.permissions.includes('*')) return true;
-  return required.every((p) => user.permissions.includes(p));
+  return allows(user, required);
 }
 
-/** Неріактивна перевірка — для побудови маршрутів поза рендером. */
+/** Перевірка прав як функція — для меню, де модулів багато. */
+export function useCan(): (required: string[]) => boolean {
+  const user = useAuth((s) => s.user);
+  return (required) => allows(user, required);
+}
+
+/** Нереактивна перевірка — для побудови маршрутів поза рендером. */
 export function canStatic(required: string[]): boolean {
-  const user = useAuth.getState().user;
-  if (!user) return false;
-  if (user.permissions.includes('*')) return true;
-  return required.every((p) => user.permissions.includes(p));
+  return allows(useAuth.getState().user, required);
 }

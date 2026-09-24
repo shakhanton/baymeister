@@ -28,8 +28,8 @@ export default function CustomersList() {
     setParams(merged, { replace: true });
   }
 
-  async function handleCreate(values: CustomerFormValues) {
-    await create.mutateAsync({
+  function handleCreate(values: CustomerFormValues) {
+    const body = {
       type: values.type,
       name: values.name,
       phone: values.phone,
@@ -37,8 +37,9 @@ export default function CustomersList() {
       tax_id: values.tax_id || null,
       notes: values.notes || null,
       discount_percent: values.discount_percent,
-    });
-    setCreating(false);
+    };
+    // Помилку показує форма через create.error — тут її не ловимо.
+    create.mutate(body, { onSuccess: () => setCreating(false) });
   }
 
   return (

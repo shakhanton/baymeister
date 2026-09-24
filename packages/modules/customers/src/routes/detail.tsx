@@ -31,8 +31,8 @@ export default function CustomerDetail() {
 
   const customer = query.data;
 
-  async function handleSave(values: CustomerFormValues) {
-    await update.mutateAsync({
+  function handleSave(values: CustomerFormValues) {
+    const body = {
       type: values.type,
       name: values.name,
       phone: values.phone,
@@ -40,8 +40,9 @@ export default function CustomerDetail() {
       tax_id: values.tax_id || null,
       notes: values.notes || null,
       discount_percent: values.discount_percent,
-    });
-    setEditing(false);
+    };
+    // Помилку показує форма через update.error — тут її не ловимо.
+    update.mutate(body, { onSuccess: () => setEditing(false) });
   }
 
   return (

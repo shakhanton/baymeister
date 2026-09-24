@@ -1,0 +1,793 @@
+openapi: 3.1.0
+
+info:
+  title: Baymeister — Закупівлі
+  version: 1.0.0
+  description: |
+    Блок `procurement`. У кого купуємо деталі, що замовили, що з цього вже
+    приїхало.
+
+    **Замовлення:** `draft` (чернетка) → `ordered` (відправлено) → `received`
+    (отримано). Рядки змінюються тільки в чернетці. Відправлене приходить
+    частинами — кожен прихід за накладною стає партією на складі (подія
+    `purchase.received` → `inventory`). Коли отримано все, замовлення закривається
+    само; недопоставку закривають вручну (`received`). Скасувати можна, поки
+    нічого не приїхало.
+
+    **Потреби:** склад шле `stock.low`, коли вільного залишку менше за мінімум.
+    Якщо деталь уже купували — вона сама додається в чернетку тому ж
+    постачальнику за останньою ціною. Якщо ні — чекає в `/procurement/needs`,
+    поки хтось обере постачальника. Потреба закривається, коли прихід підняв
+    залишок вище мінімуму.
+
+    Кількість — рядком із трьома знаками (`"4.500"`), гроші — з двома (`"245.50"`).
+
+servers:
+  - url: /api
+    description: Gateway маршрутизує все під /api/procurement у цей сервіс.
+
+tags:
+  - name: suppliers
+    description: Постачальники
+  - name: orders
+    description: Замовлення постачальникам і приходи
+  - name: needs
+    description: Що треба замовити — за сигналами складу
+  - name: health
+    description: Службові
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Перевірка живості сервісу
+      security: []
+      responses:
+        "200":
+          description: Сервіс живий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /procurement/suppliers:
+    get:
+      tags: [suppliers]
+      operationId: listSuppliers
+      summary: Постачальники
+      description: Потрібне право `procurement.read`.
+      parameters:
+        - name: search
+          in: query
+          description: Назва, ЄДРПОУ, телефон або контактна особа
+          schema: { type: string, maxLength: 120 }
+        - name: archived
+          in: query
+          description: Разом з архівними
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Сторінка результатів
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupplierPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [suppliers]
+      operationId: createSupplier
+      summary: Новий постачальник
+      description: Потрібне право `procurement.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupplierCreate" }
+      responses:
+        "201":
+          description: Створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Supplier" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/suppliers/{supplierId}:
+    parameters:
+      - name: supplierId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [suppliers]
+      operationId: getSupplier
+      summary: Постачальник
+      description: Потрібне право `procurement.read`.
+      responses:
+        "200":
+          description: Постачальник
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Supplier" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [suppliers]
+      operationId: updateSupplier
+      summary: Змінити або архівувати постачальника
+      description: |
+        Потрібне право `procurement.write`. Постачальник не видаляється —
+        `active: false` ховає його зі списку й забороняє нові замовлення.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupplierUpdate" }
+      responses:
+        "200":
+          description: Оновлено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Supplier" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/orders:
+    get:
+      tags: [orders]
+      operationId: listOrders
+      summary: Замовлення постачальникам
+      description: Потрібне право `procurement.read`. Від нових до старих.
+      parameters:
+        - name: search
+          in: query
+          description: Номер замовлення або назва постачальника
+          schema: { type: string, maxLength: 120 }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/Status" }
+        - name: supplier_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Сторінка результатів
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [orders]
+      operationId: createOrder
+      summary: Нова чернетка замовлення
+      description: Потрібне право `procurement.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderCreate" }
+      responses:
+        "201":
+          description: Чернетка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "422":
+          description: Постачальника немає або він в архіві
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/orders/{orderId}:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    get:
+      tags: [orders]
+      operationId: getOrder
+      summary: Замовлення з рядками й приходами
+      description: Потрібне право `procurement.read`.
+      responses:
+        "200":
+          description: Замовлення
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [orders]
+      operationId: updateOrder
+      summary: Примітка, очікувана дата, постачальник
+      description: |
+        Потрібне право `procurement.write`. Постачальника можна змінити лише в
+        чернетці; отримане чи скасоване не змінюється.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderUpdate" }
+      responses:
+        "200":
+          description: Оновлено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/orders/{orderId}/status:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    post:
+      tags: [orders]
+      operationId: changeOrderStatus
+      summary: Відправити, закрити з недопоставкою або скасувати
+      description: |
+        Потрібне право `procurement.write`.
+
+        | з | у |
+        |---|---|
+        | `draft` | `ordered` (є рядки, у всіх вказано ціну), `cancelled` |
+        | `ordered` | `received` (хоч щось отримано), `cancelled` (нічого не отримано) |
+
+        `ordered` публікує `purchase.ordered`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatusChange" }
+      responses:
+        "200":
+          description: Замовлення в новому статусі
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/orders/{orderId}/lines:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    post:
+      tags: [orders]
+      operationId: addOrderLine
+      summary: Додати деталь з прайсу
+      description: |
+        Потрібне право `procurement.write` і `catalog.read`. Лише в чернетці.
+        Назва, артикул і одиниця беруться з `catalog`. Одна деталь — один рядок.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LineCreate" }
+      responses:
+        "201":
+          description: Замовлення з новим рядком
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422":
+          description: Дані не пройшли валідацію або деталі немає в каталозі
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503":
+          description: Блок `catalog` недоступний
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /procurement/orders/{orderId}/lines/{lineId}:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+      - name: lineId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [orders]
+      operationId: updateOrderLine
+      summary: Кількість або ціна рядка
+      description: Потрібне право `procurement.write`. Лише в чернетці.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LineUpdate" }
+      responses:
+        "200":
+          description: Замовлення
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [orders]
+      operationId: deleteOrderLine
+      summary: Прибрати рядок
+      description: Потрібне право `procurement.write`. Лише в чернетці.
+      responses:
+        "200":
+          description: Замовлення без рядка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/orders/{orderId}/receipts:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    post:
+      tags: [orders]
+      operationId: receiveOrder
+      summary: Прихід за накладною
+      description: |
+        Потрібне право `procurement.write`. Лише для відправленого замовлення.
+        Більше, ніж лишилось отримати, прийняти не можна. Публікує
+        `purchase.received` — склад заводить партії. Коли отримано все,
+        замовлення стає `received`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReceiptCreate" }
+      responses:
+        "201":
+          description: Замовлення після приходу
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/needs:
+    get:
+      tags: [needs]
+      operationId: listNeeds
+      summary: Що треба замовити
+      description: |
+        Потрібне право `procurement.read`. Відкриті потреби від складу, від
+        нових до старих: де деталь уже замовлена і в кого її брали востаннє.
+      responses:
+        "200":
+          description: Потреби
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Need" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/needs/{partId}:
+    parameters:
+      - $ref: "#/components/parameters/PartId"
+    delete:
+      tags: [needs]
+      operationId: dismissNeed
+      summary: Не замовляти
+      description: |
+        Потрібне право `procurement.write`. Потреба закривається до наступного
+        сигналу складу.
+      responses:
+        "204": { description: Закрито }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /procurement/needs/{partId}/order:
+    parameters:
+      - $ref: "#/components/parameters/PartId"
+    post:
+      tags: [needs]
+      operationId: orderNeed
+      summary: Додати в чернетку постачальнику
+      description: |
+        Потрібне право `procurement.write`. Деталь іде в чернетку обраного
+        постачальника (нову, якщо чернетки немає) — стільки, щоб вільного стало
+        два мінімуми, за останньою відомою ціною.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NeedOrder" }
+      responses:
+        "200":
+          description: Чернетка з деталлю
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Деталь уже в іншому відкритому замовленні
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен видає блок `identity`, перевіряє gateway.
+
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PartId:
+      name: partId
+      in: path
+      required: true
+      description: Ідентифікатор деталі в `catalog`
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+
+  responses:
+    Unauthorized:
+      description: Немає або недійсний токен
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        Бракує права: читання потребує `procurement.read`, зміни — `procurement.write`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Не знайдено
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Суперечить стану — напр. рядки відправленого замовлення, дубль назви
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Дані не пройшли валідацію
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Qty:
+      type: string
+      pattern: "^-?\\d{1,9}\\.\\d{3}$"
+      examples: ["4.500"]
+
+    QtyInput:
+      type: string
+      pattern: "^\\d{1,6}([.,]\\d{1,3})?$"
+      examples: ["4,5"]
+
+    Money:
+      type: string
+      pattern: "^\\d{1,11}\\.\\d{2}$"
+      examples: ["245.50"]
+
+    MoneyInput:
+      type: string
+      pattern: "^\\d{1,9}([.,]\\d{1,2})?$"
+      examples: ["180"]
+
+    Status:
+      type: string
+      enum: [draft, ordered, received, cancelled]
+      description: |
+        `draft` — чернетка, `ordered` — відправлено постачальнику, `received` —
+        отримано (повністю або закрито з недопоставкою), `cancelled` — скасовано.
+
+    Supplier:
+      type: object
+      required: [id, name, edrpou, contact, phone, email, note, active]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, examples: ["Автотехнікс"] }
+        edrpou: { type: [string, "null"], examples: ["12345678"] }
+        contact: { type: [string, "null"], description: Контактна особа }
+        phone: { type: [string, "null"], examples: ["+380501112233"] }
+        email: { type: [string, "null"], format: email }
+        note: { type: [string, "null"] }
+        active: { type: boolean, description: false — в архіві }
+
+    SupplierCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        edrpou:
+          type: [string, "null"]
+          pattern: "^\\d{8}$|^\\d{10}$"
+          description: ЄДРПОУ (8 цифр) або РНОКПП ФОП (10 цифр)
+        contact: { type: [string, "null"], maxLength: 120 }
+        phone: { type: [string, "null"], pattern: "^\\+[1-9][0-9]{7,14}$" }
+        email: { type: [string, "null"], format: email }
+        note: { type: [string, "null"], maxLength: 500 }
+
+    SupplierUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        edrpou: { type: [string, "null"], pattern: "^\\d{8}$|^\\d{10}$" }
+        contact: { type: [string, "null"], maxLength: 120 }
+        phone: { type: [string, "null"], pattern: "^\\+[1-9][0-9]{7,14}$" }
+        email: { type: [string, "null"], format: email }
+        note: { type: [string, "null"], maxLength: 500 }
+        active: { type: boolean }
+
+    SupplierPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Supplier" }
+        total: { type: integer }
+
+    SupplierRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    OrderCreate:
+      type: object
+      required: [supplier_id]
+      properties:
+        supplier_id: { type: string, format: uuid }
+        note: { type: [string, "null"], maxLength: 500 }
+        expected_on: { type: [string, "null"], format: date }
+
+    OrderUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        supplier_id: { type: string, format: uuid }
+        note: { type: [string, "null"], maxLength: 500 }
+        expected_on: { type: [string, "null"], format: date }
+
+    StatusChange:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ordered, received, cancelled] }
+
+    LineCreate:
+      type: object
+      required: [part_id, qty, unit_cost]
+      properties:
+        part_id: { type: string, format: uuid }
+        qty: { $ref: "#/components/schemas/QtyInput" }
+        unit_cost:
+          $ref: "#/components/schemas/MoneyInput"
+          description: Закупівельна ціна за одиницю, 0 — ще невідома
+
+    LineUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        qty: { $ref: "#/components/schemas/QtyInput" }
+        unit_cost: { $ref: "#/components/schemas/MoneyInput" }
+
+    Line:
+      type: object
+      required: [id, part_id, sku, brand, name, unit, qty, unit_cost, amount, qty_received]
+      properties:
+        id: { type: string, format: uuid }
+        part_id: { type: string, format: uuid }
+        sku: { type: string, examples: ["OC90"] }
+        brand: { type: string, examples: ["MAHLE"] }
+        name: { type: string, examples: ["Фільтр оливний"] }
+        unit: { type: string, examples: ["pcs"] }
+        qty: { $ref: "#/components/schemas/Qty" }
+        unit_cost: { $ref: "#/components/schemas/Money" }
+        amount:
+          $ref: "#/components/schemas/Money"
+          description: qty × unit_cost, до копійки
+        qty_received: { $ref: "#/components/schemas/Qty" }
+
+    ReceiptLineCreate:
+      type: object
+      required: [line_id, qty]
+      properties:
+        line_id: { type: string, format: uuid }
+        qty: { $ref: "#/components/schemas/QtyInput" }
+        unit_cost:
+          description: Фактична ціна з накладної; не вказано — з рядка замовлення
+          oneOf:
+            - $ref: "#/components/schemas/MoneyInput"
+            - type: "null"
+
+    ReceiptCreate:
+      type: object
+      required: [lines]
+      properties:
+        invoice_number:
+          type: [string, "null"]
+          maxLength: 40
+          description: Номер накладної постачальника
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ReceiptLineCreate" }
+
+    Receipt:
+      type: object
+      required: [id, invoice_number, received_at, lines, total]
+      properties:
+        id: { type: string, format: uuid }
+        invoice_number: { type: [string, "null"] }
+        received_at: { type: string, format: date-time }
+        lines: { type: integer, description: Скільки рядків приїхало }
+        total: { $ref: "#/components/schemas/Money" }
+
+    Order:
+      type: object
+      required:
+        - id
+        - number
+        - status
+        - auto
+        - supplier
+        - note
+        - expected_on
+        - created_at
+        - ordered_at
+        - closed_at
+        - lines
+        - receipts
+        - total
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, examples: ["PO-2026-00042"] }
+        status: { $ref: "#/components/schemas/Status" }
+        auto:
+          type: boolean
+          description: Чернетку склав сервіс сам за сигналом складу
+        supplier: { $ref: "#/components/schemas/SupplierRef" }
+        note: { type: [string, "null"] }
+        expected_on: { type: [string, "null"], format: date }
+        created_at: { type: string, format: date-time }
+        ordered_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/Line" }
+        receipts:
+          type: array
+          items: { $ref: "#/components/schemas/Receipt" }
+        total: { $ref: "#/components/schemas/Money" }
+
+    OrderSummary:
+      type: object
+      required:
+        [id, number, status, auto, supplier, expected_on, created_at, lines, total, received_share]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        auto: { type: boolean }
+        supplier: { $ref: "#/components/schemas/SupplierRef" }
+        expected_on: { type: [string, "null"], format: date }
+        created_at: { type: string, format: date-time }
+        lines: { type: integer }
+        total: { $ref: "#/components/schemas/Money" }
+        received_share:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Частка отриманого за кількістю — 0 нічого, 1 усе
+
+    OrderPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderSummary" }
+        total: { type: integer }
+
+    OrderRef:
+      type: object
+      required: [id, number, status, supplier]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        supplier: { $ref: "#/components/schemas/SupplierRef" }
+
+    Need:
+      type: object
+      required:
+        [part_id, sku, brand, name, unit, free, min_qty, raised_at, order, last_supplier]
+      properties:
+        part_id: { type: string, format: uuid }
+        sku: { type: string }
+        brand: { type: string }
+        name: { type: string }
+        unit: { type: string }
+        free:
+          $ref: "#/components/schemas/Qty"
+          description: Вільний залишок за останньою подією складу
+        min_qty: { $ref: "#/components/schemas/Qty" }
+        raised_at: { type: string, format: date-time }
+        order:
+          description: Відкрите замовлення, де деталь уже є
+          oneOf:
+            - $ref: "#/components/schemas/OrderRef"
+            - type: "null"
+        last_supplier:
+          description: У кого купували востаннє
+          oneOf:
+            - $ref: "#/components/schemas/SupplierRef"
+            - type: "null"
+
+    NeedOrder:
+      type: object
+      required: [supplier_id]
+      properties:
+        supplier_id: { type: string, format: uuid }
+
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Повідомлення, придатне для показу користувачу
+
+security:
+  - bearerAuth: []

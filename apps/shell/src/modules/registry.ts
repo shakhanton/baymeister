@@ -1,6 +1,13 @@
 import type { AppModule } from '@baymeister/module-kit';
 import { assertRegistryIsValid } from '@baymeister/module-kit';
+import { catalogModule } from '@baymeister/module-catalog';
 import { customersModule } from '@baymeister/module-customers';
+import { identityModule } from '@baymeister/module-identity';
+import { inventoryModule } from '@baymeister/module-inventory';
+import { procurementModule } from '@baymeister/module-procurement';
+import { schedulingModule } from '@baymeister/module-scheduling';
+import { vehiclesModule } from '@baymeister/module-vehicles';
+import { workOrdersModule } from '@baymeister/module-work-orders';
 
 /**
  * Реєстр модулів — єдине джерело правди про склад продукту.
@@ -20,26 +27,8 @@ import { customersModule } from '@baymeister/module-customers';
  */
 export const registry: AppModule[] = [
   // ── Операції ────────────────────────────────────────────────────────────
-  {
-    id: 'scheduling',
-    title: 'Планувальник',
-    icon: 'calendar-days',
-    status: 'planned',
-    nav: { group: 'operations', order: 10 },
-    permissions: ['scheduling.read'],
-    routes: [],
-    description: 'Записи, пости й підйомники, завантаження механіків, онлайн-бронювання.',
-  },
-  {
-    id: 'work-orders',
-    title: 'Наряд-замовлення',
-    icon: 'clipboard-list',
-    status: 'planned',
-    nav: { group: 'operations', order: 20 },
-    permissions: ['work_orders.read'],
-    routes: [],
-    description: 'Ядро системи: роботи, деталі, статуси, хронометраж.',
-  },
+  schedulingModule,
+  workOrdersModule,
   {
     id: 'inspections',
     title: 'Огляди',
@@ -53,48 +42,12 @@ export const registry: AppModule[] = [
 
   // ── Довідники ───────────────────────────────────────────────────────────
   customersModule,
-  {
-    id: 'vehicles',
-    title: 'Автомобілі',
-    icon: 'car',
-    status: 'planned',
-    nav: { group: 'catalog', order: 20 },
-    permissions: ['vehicles.read'],
-    routes: [],
-    description: 'Автопарк клієнтів, VIN, сервісна книжка, пробіг.',
-  },
-  {
-    id: 'catalog',
-    title: 'Послуги та прайс',
-    icon: 'book-open',
-    status: 'planned',
-    nav: { group: 'catalog', order: 30 },
-    permissions: ['catalog.read'],
-    routes: [],
-    description: 'Послуги, нормо-години, прайс-листи, каталог запчастин.',
-  },
+  vehiclesModule,
+  catalogModule,
 
   // ── Склад ───────────────────────────────────────────────────────────────
-  {
-    id: 'inventory',
-    title: 'Склад',
-    icon: 'package',
-    status: 'planned',
-    nav: { group: 'warehouse', order: 10 },
-    permissions: ['inventory.read'],
-    routes: [],
-    description: 'Залишки за FIFO, комірки, резерви, штрихкоди, інвентаризація.',
-  },
-  {
-    id: 'procurement',
-    title: 'Закупівлі',
-    icon: 'truck',
-    status: 'planned',
-    nav: { group: 'warehouse', order: 20 },
-    permissions: ['procurement.read'],
-    routes: [],
-    description: 'Постачальники, замовлення по API, прибуткові накладні.',
-  },
+  inventoryModule,
+  procurementModule,
 
   // ── Фінанси ─────────────────────────────────────────────────────────────
   {
@@ -141,16 +94,7 @@ export const registry: AppModule[] = [
   },
 
   // ── Налаштування ────────────────────────────────────────────────────────
-  {
-    id: 'identity',
-    title: 'Користувачі та ролі',
-    icon: 'user-cog',
-    status: 'planned',
-    nav: { group: 'settings', order: 10 },
-    permissions: ['identity.read'],
-    routes: [],
-    description: 'Співробітники, ролі, права доступу, сесії.',
-  },
+  identityModule,
   {
     id: 'notifications',
     title: 'Сповіщення',

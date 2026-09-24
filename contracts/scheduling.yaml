@@ -1,0 +1,456 @@
+openapi: 3.1.0
+
+info:
+  title: Baymeister — Планувальник
+  version: 1.0.0
+  description: |
+    Блок `scheduling`. Володіє постами (підйомники, стенди, мийка) і записами
+    клієнтів на них.
+
+    Головне правило: **на одному посту записи не перетинаються в часі.** Його
+    тримає і сервіс (зрозуміла 409), і сама база (exclusion constraint) — два
+    одночасні записи на ту саму хвилину не пройдуть обидва.
+
+    Запис тримає `customer_id` і необовʼязковий `vehicle_id` разом із власною
+    копією імені, телефону й держномера — дошка на день малюється без жодного
+    запиту до `customers` чи `vehicles`. Копія оновлюється подіями
+    `customer.updated` і `vehicle.updated`.
+
+    Що блок НЕ робить: не веде наряд (блок `work-orders`). Коли клієнт приїхав,
+    запис отримує статус `arrived`; наряд відкривається вже в `work-orders`.
+
+servers:
+  - url: /api
+    description: Gateway маршрутизує все під /api/scheduling у цей сервіс.
+
+tags:
+  - name: bays
+    description: Пости
+  - name: appointments
+    description: Записи
+  - name: health
+    description: Службові
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Перевірка живості сервісу
+      security: []
+      responses:
+        "200":
+          description: Сервіс живий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /scheduling/bays:
+    get:
+      tags: [bays]
+      operationId: listBays
+      summary: Пости в порядку показу на дошці
+      description: Потрібне право `scheduling.read`.
+      parameters:
+        - name: archived
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Пости
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Bay" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [bays]
+      operationId: createBay
+      summary: Додати пост
+      description: Потрібне право `scheduling.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BayCreate" }
+      responses:
+        "201":
+          description: Пост створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bay" }
+        "409":
+          description: Пост із такою назвою вже є
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /scheduling/bays/{bayId}:
+    parameters:
+      - $ref: "#/components/parameters/BayId"
+    patch:
+      tags: [bays]
+      operationId: updateBay
+      summary: Змінити пост
+      description: Потрібне право `scheduling.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BayUpdate" }
+      responses:
+        "200":
+          description: Оновлений пост
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bay" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Назва зайнята іншим постом
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /scheduling/bays/{bayId}/archive:
+    parameters:
+      - $ref: "#/components/parameters/BayId"
+    post:
+      tags: [bays]
+      operationId: archiveBay
+      summary: Прибрати пост з дошки
+      description: |
+        Потрібне право `scheduling.write`. Не можна, поки на пост є майбутні
+        активні записи — їх спершу треба перенести або скасувати.
+      responses:
+        "200":
+          description: Архівований пост
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bay" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: На пост є майбутні записи
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /scheduling/appointments:
+    get:
+      tags: [appointments]
+      operationId: listAppointments
+      summary: Записи, що перетинають проміжок часу
+      description: |
+        Потрібне право `scheduling.read`. Проміжок `[from, to)` — не довше 31 дня.
+        Скасовані не повертаються, якщо не попросити `include_cancelled`.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: bay_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: customer_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: include_cancelled
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Записи, впорядковані за часом початку
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Appointment" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [appointments]
+      operationId: createAppointment
+      summary: Записати клієнта
+      description: |
+        Потрібне право `scheduling.write`. Сервіс перевіряє клієнта в `customers`
+        і, якщо вказано, автомобіль у `vehicles` — від імені того самого
+        користувача.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AppointmentCreate" }
+      responses:
+        "201":
+          description: Запис створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "409":
+          description: Пост у цей час зайнятий
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Дані не пройшли валідацію, клієнта чи авто не існує, авто не цього клієнта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503":
+          description: Блок `customers` чи `vehicles` недоступний
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /scheduling/appointments/{appointmentId}:
+    parameters:
+      - $ref: "#/components/parameters/AppointmentId"
+    get:
+      tags: [appointments]
+      operationId: getAppointment
+      summary: Запис за ідентифікатором
+      description: Потрібне право `scheduling.read`.
+      responses:
+        "200":
+          description: Запис
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [appointments]
+      operationId: rescheduleAppointment
+      summary: Перенести запис або змінити примітку
+      description: |
+        Потрібне право `scheduling.write`. Переносити можна лише запис у статусі
+        `booked`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AppointmentUpdate" }
+      responses:
+        "200":
+          description: Оновлений запис
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Пост у новий час зайнятий або запис уже не можна переносити
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /scheduling/appointments/{appointmentId}/status:
+    parameters:
+      - $ref: "#/components/parameters/AppointmentId"
+    post:
+      tags: [appointments]
+      operationId: changeAppointmentStatus
+      summary: Змінити статус запису
+      description: |
+        Потрібне право `scheduling.write`. Дозволені переходи:
+
+        | з | у |
+        |---|---|
+        | `booked` | `arrived`, `cancelled`, `no_show` |
+        | `arrived` | `completed`, `cancelled` |
+
+        `completed`, `cancelled` і `no_show` — кінцеві. Скасований запис
+        звільняє пост.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatusChange" }
+      responses:
+        "200":
+          description: Запис із новим статусом
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Такий перехід недозволений
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен видає блок `identity`, перевіряє gateway.
+
+  parameters:
+    BayId:
+      name: bayId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Немає або недійсний токен
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        Бракує права: читання потребує `scheduling.read`, зміни — `scheduling.write`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Не знайдено
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Дані не пройшли валідацію
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    BayKind:
+      type: string
+      enum: [lift, pit, alignment, diagnostics, wash, other]
+      description: |
+        `lift` — підйомник, `pit` — оглядова яма, `alignment` — стенд
+        розвал-сходження, `diagnostics` — діагностика, `wash` — мийка.
+
+    Bay:
+      type: object
+      required: [id, name, kind, position, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, examples: ["Підйомник 1"] }
+        kind: { $ref: "#/components/schemas/BayKind" }
+        position:
+          type: integer
+          description: Порядок колонок на дошці
+        archived_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    BayCreate:
+      type: object
+      required: [name, kind]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        kind: { $ref: "#/components/schemas/BayKind" }
+        position: { type: integer, minimum: 0, maximum: 1000, default: 0 }
+
+    BayUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        kind: { $ref: "#/components/schemas/BayKind" }
+        position: { type: integer, minimum: 0, maximum: 1000 }
+
+    AppointmentStatus:
+      type: string
+      enum: [booked, arrived, completed, cancelled, no_show]
+
+    Appointment:
+      type: object
+      required:
+        [id, bay_id, customer_id, customer_name, customer_phone, starts_at, ends_at, status, source, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        bay_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        customer_name: { type: string, description: Копія з `customers` }
+        customer_phone: { type: string, description: Копія з `customers` }
+        vehicle_id: { type: [string, "null"], format: uuid }
+        vehicle_label:
+          type: [string, "null"]
+          description: Копія з `vehicles` — «AA1234BC · Volkswagen Golf»
+          examples: ["AA1234BC · Volkswagen Golf"]
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/AppointmentStatus" }
+        source:
+          type: string
+          enum: [phone, walk_in, online]
+        note: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AppointmentCreate:
+      type: object
+      required: [bay_id, customer_id, starts_at, ends_at]
+      properties:
+        bay_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        vehicle_id: { type: [string, "null"], format: uuid }
+        starts_at: { type: string, format: date-time }
+        ends_at:
+          type: string
+          format: date-time
+          description: Пізніше за `starts_at`, не довше 12 годин
+        source: { type: string, enum: [phone, walk_in, online], default: phone }
+        note: { type: [string, "null"], maxLength: 500 }
+
+    AppointmentUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        bay_id: { type: string, format: uuid }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        note: { type: [string, "null"], maxLength: 500 }
+
+    StatusChange:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/AppointmentStatus" }
+
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Повідомлення, придатне для показу користувачу
+          examples: ["Підйомник 1 зайнятий з 10:00 до 11:30: Петренко Іван"]
+
+security:
+  - bearerAuth: []

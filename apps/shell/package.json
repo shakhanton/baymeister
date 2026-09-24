@@ -7,11 +7,20 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
+    "@baymeister/api-client": "workspace:*",
+    "@baymeister/module-catalog": "workspace:*",
     "@baymeister/module-customers": "workspace:*",
+    "@baymeister/module-identity": "workspace:*",
+    "@baymeister/module-inventory": "workspace:*",
+    "@baymeister/module-procurement": "workspace:*",
     "@baymeister/module-kit": "workspace:*",
+    "@baymeister/module-scheduling": "workspace:*",
+    "@baymeister/module-vehicles": "workspace:*",
+    "@baymeister/module-work-orders": "workspace:*",
     "@baymeister/ui": "workspace:*",
     "@tanstack/react-query": "^5.66.0",
     "lucide-react": "^0.474.0",

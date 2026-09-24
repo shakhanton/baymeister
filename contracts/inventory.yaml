@@ -1,0 +1,380 @@
+openapi: 3.1.0
+
+info:
+  title: Baymeister — Склад
+  version: 1.0.0
+  description: |
+    Блок `inventory`. Скільки якої деталі є, де вона лежить, скільки з неї вже
+    обіцяно нарядам і скільки вона коштувала.
+
+    **Три числа на деталь:**
+    - `on_hand` — фізично на складі;
+    - `reserved` — обіцяно відкритим нарядам (з подій `parts.reserved`);
+    - `free` = `on_hand − reserved` — те, що можна обіцяти далі. Може бути
+      від'ємним: наряд просить більше, ніж є, — це сигнал купувати.
+
+    **Собівартість — FIFO.** Кожен прихід — партія зі своєю ціною. Списання
+    бере з найстаріших партій, тому вартість списаного й залишку точна.
+
+    **Списання — автоматичне.** Коли наряд закрито (`order.closed`), зарезервовані
+    під нього деталі списуються. Скасований наряд (`order.cancelled`) знімає
+    резерви. Вручну деталі не видаються — тільки через наряд або інвентаризацію.
+
+    Картка деталі (артикул, бренд, назва, одиниця) — копія з `catalog`, що
+    оновлюється подіями `part.created` / `part.updated`.
+
+    Кількість — рядком із трьома знаками (`"4.500"`), гроші — з двома (`"245.50"`).
+
+servers:
+  - url: /api
+    description: Gateway маршрутизує все під /api/inventory у цей сервіс.
+
+tags:
+  - name: stock
+    description: Залишки
+  - name: receipts
+    description: Прихід
+  - name: health
+    description: Службові
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Перевірка живості сервісу
+      security: []
+      responses:
+        "200":
+          description: Сервіс живий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /inventory/stock:
+    get:
+      tags: [stock]
+      operationId: listStock
+      summary: Залишки
+      description: Потрібне право `inventory.read`.
+      parameters:
+        - name: search
+          in: query
+          description: Артикул, бренд, назва або комірка
+          schema: { type: string, maxLength: 120 }
+        - name: low
+          in: query
+          description: Тільки ті, де вільний залишок нижчий за мінімум
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Сторінка результатів
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /inventory/stock/{partId}:
+    parameters:
+      - $ref: "#/components/parameters/PartId"
+    get:
+      tags: [stock]
+      operationId: getStockItem
+      summary: Деталь із партіями, резервами й рухом
+      description: Потрібне право `inventory.read`.
+      responses:
+        "200":
+          description: Картка деталі
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [stock]
+      operationId: updateStockItem
+      summary: Комірка й мінімальний залишок
+      description: Потрібне право `inventory.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockItemUpdate" }
+      responses:
+        "200":
+          description: Оновлена картка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /inventory/stock/{partId}/count:
+    parameters:
+      - $ref: "#/components/parameters/PartId"
+    post:
+      tags: [stock]
+      operationId: countStock
+      summary: Інвентаризація — фактична кількість
+      description: |
+        Потрібне право `inventory.write`. Нестача списується з найстаріших
+        партій; надлишок стає новою партією за ціною останнього приходу.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CountCreate" }
+      responses:
+        "200":
+          description: Картка після інвентаризації
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /inventory/receipts:
+    post:
+      tags: [receipts]
+      operationId: receive
+      summary: Прихід партії
+      description: |
+        Потрібне право `inventory.write` і `catalog.read`. Деталь перевіряється в
+        `catalog`; якщо на складі її ще не було — заводиться картка.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReceiptCreate" }
+      responses:
+        "201":
+          description: Картка після приходу
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockItem" }
+        "422":
+          description: Дані не пройшли валідацію або деталі немає в каталозі
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503":
+          description: Блок `catalog` недоступний
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен видає блок `identity`, перевіряє gateway.
+
+  parameters:
+    PartId:
+      name: partId
+      in: path
+      required: true
+      description: Ідентифікатор деталі в `catalog`
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Немає або недійсний токен
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        Бракує права: читання потребує `inventory.read`, зміни — `inventory.write`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Деталі на складі немає
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Дані не пройшли валідацію
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Qty:
+      type: string
+      pattern: "^-?\\d{1,9}\\.\\d{3}$"
+      examples: ["4.500"]
+
+    QtyInput:
+      type: string
+      pattern: "^\\d{1,6}([.,]\\d{1,3})?$"
+      examples: ["4,5"]
+
+    Money:
+      type: string
+      pattern: "^\\d{1,11}\\.\\d{2}$"
+      examples: ["245.50"]
+
+    MoneyInput:
+      type: string
+      pattern: "^\\d{1,9}([.,]\\d{1,2})?$"
+      examples: ["180"]
+
+    StockItem:
+      type: object
+      required: [part_id, sku, brand, name, unit, on_hand, reserved, free, min_qty, value, low]
+      properties:
+        part_id: { type: string, format: uuid }
+        sku: { type: string, examples: ["OC90"] }
+        brand: { type: string, examples: ["MAHLE"] }
+        name: { type: string, examples: ["Фільтр оливний"] }
+        unit: { type: string, examples: ["pcs"] }
+        location:
+          type: [string, "null"]
+          description: Комірка на складі
+          examples: ["A-03-2"]
+        on_hand: { $ref: "#/components/schemas/Qty" }
+        reserved: { $ref: "#/components/schemas/Qty" }
+        free:
+          $ref: "#/components/schemas/Qty"
+          description: on_hand − reserved, може бути від'ємним
+        min_qty:
+          $ref: "#/components/schemas/Qty"
+          description: Нижче цього вільного залишку — `stock.low`
+        value:
+          $ref: "#/components/schemas/Money"
+          description: Собівартість залишку за FIFO
+        low: { type: boolean, description: "free < min_qty" }
+
+    Lot:
+      type: object
+      required: [id, received_at, qty_received, qty_left, unit_cost, source]
+      properties:
+        id: { type: string, format: uuid }
+        received_at: { type: string, format: date-time }
+        qty_received: { $ref: "#/components/schemas/Qty" }
+        qty_left: { $ref: "#/components/schemas/Qty" }
+        unit_cost: { $ref: "#/components/schemas/Money" }
+        source: { type: string, enum: [receipt, count] }
+        note: { type: [string, "null"] }
+
+    Reservation:
+      type: object
+      required: [line_id, order_id, qty]
+      properties:
+        line_id: { type: string, format: uuid }
+        order_id: { type: string, format: uuid }
+        order_number: { type: [string, "null"] }
+        qty: { $ref: "#/components/schemas/Qty" }
+
+    Movement:
+      type: object
+      required: [id, kind, qty, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [receipt, issue, count_plus, count_minus]
+          description: |
+            `receipt` — прихід, `issue` — списано в наряд, `count_plus` /
+            `count_minus` — надлишок / нестача при інвентаризації.
+        qty:
+          $ref: "#/components/schemas/Qty"
+          description: Зі знаком — плюс прихід, мінус списання
+        cost:
+          $ref: "#/components/schemas/Money"
+          description: Собівартість руху за FIFO
+        order_number: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+
+    StockDetail:
+      allOf:
+        - $ref: "#/components/schemas/StockItem"
+        - type: object
+          required: [lots, reservations, movements]
+          properties:
+            lots:
+              type: array
+              description: Партії з залишком, від старих до нових — у порядку списання
+              items: { $ref: "#/components/schemas/Lot" }
+            reservations:
+              type: array
+              items: { $ref: "#/components/schemas/Reservation" }
+            movements:
+              type: array
+              description: Останні 50 рухів, від нових до старих
+              items: { $ref: "#/components/schemas/Movement" }
+
+    StockPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StockItem" }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    StockItemUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        location: { type: [string, "null"], maxLength: 20 }
+        min_qty: { $ref: "#/components/schemas/QtyInput" }
+
+    ReceiptCreate:
+      type: object
+      required: [part_id, qty, unit_cost]
+      properties:
+        part_id: { type: string, format: uuid }
+        qty: { $ref: "#/components/schemas/QtyInput" }
+        unit_cost:
+          $ref: "#/components/schemas/MoneyInput"
+          description: Закупівельна ціна за одиницю
+        note:
+          type: [string, "null"]
+          maxLength: 200
+          description: Напр. номер накладної постачальника
+
+    CountCreate:
+      type: object
+      required: [counted]
+      properties:
+        counted:
+          type: string
+          pattern: "^\\d{1,6}([.,]\\d{1,3})?$"
+          description: Фактично нараховано, може бути 0
+        note: { type: [string, "null"], maxLength: 200 }
+
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Повідомлення, придатне для показу користувачу
+
+security:
+  - bearerAuth: []

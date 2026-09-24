@@ -72,13 +72,17 @@ at-least-once, а не exactly-once.
 справді віддає сервіс: коди, тіла, помилки. База — SQLite у памʼяті, тому
 `pytest` не потребує ні Docker, ні мережі.
 
+**Права — у сервісі, а не у фронті.** Читання вимагає `customers.read`,
+зміни — `customers.write`; перевірка в `app/api/auth.py` за заголовками
+`X-User-*`, які ставить gateway. Меню ховає блок без прав, але захищає бекенд.
+
 **Помилки — текстом для людини.** Бекенд віддає `{"detail": "Клієнт із
 телефоном +380671234567 уже існує"}`, фронт показує саме це, а не «HTTP 409».
 
 ## Запуск
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres           # плюс identity і gateway — див. README
 cd services/customers
 cp .env.example .env
 uv sync --group dev
@@ -86,14 +90,14 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8001
 ```
 
-Фронтенд у дев-режимі ходить через проксі Vite: `/api/customers` → `:8001`.
-Коли зʼявиться справжній gateway, зміниться один рядок у `vite.config.ts`.
+Фронтенд ходить через gateway: Vite проксіює `/api` на `:8000`, gateway —
+`/api/customers` на `:8001`.
 
 ## Перевірки
 
 ```bash
 cd services/customers
-uv run pytest         # 11 тестів
+uv run pytest         # 13 тестів
 uv run ruff check .
 uv run mypy app
 
@@ -103,7 +107,5 @@ pnpm --filter @baymeister/module-customers typecheck
 
 ## Що лишилось зробити
 
-- Права доступу. Зараз каркас працює під вигаданим власником із правом `*`;
-  реальна перевірка `customers.read` запрацює разом із блоком `identity`.
 - Історія звернень і сегменти клієнтів — у контракті їх ще немає.
 - Обʼєднання дублів: два клієнти з різними номерами, але однією людиною.

@@ -73,6 +73,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CustomerPage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
     post:
       tags: [customers]
@@ -96,6 +97,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /customers/{customerId}:
     parameters:
@@ -113,6 +115,7 @@ paths:
               schema: { $ref: "#/components/schemas/Customer" }
         "404": { $ref: "#/components/responses/NotFound" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
     patch:
       tags: [customers]
@@ -138,6 +141,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
   /customers/{customerId}/archive:
     parameters:
@@ -157,6 +161,7 @@ paths:
               schema: { $ref: "#/components/schemas/Customer" }
         "404": { $ref: "#/components/responses/NotFound" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 
 components:
   securitySchemes:
@@ -176,6 +181,12 @@ components:
   responses:
     Unauthorized:
       description: Немає або недійсний токен
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        Бракує права: читання потребує `customers.read`, зміни — `customers.write`.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

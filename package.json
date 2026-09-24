@@ -13,7 +13,13 @@
     "test": "turbo run test"
   },
   "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.12.0",
     "turbo": "^2.5.5",
-    "typescript": "^5.7.3"
-  }
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.70.1"
+  },
+  "type": "module"
 }

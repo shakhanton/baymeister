@@ -1,0 +1,91 @@
+# Перевірки на кожен PR і пуш у main.
+#
+# Два незалежні контури: фронтенд (pnpm-монорепо) і бекенд (по job-у на
+# сервіс). Сервіс перевіряється тільки своїми тестами — SQLite у памʼяті,
+# без Docker і мережі, тому job-и швидкі й не флакають.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend — lint, types, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Версію pnpm бере з поля packageManager у package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Згенеровані клієнти комітяться. Якщо контракт змінили, а клієнт ні —
+      # фронт компілюється проти старих типів і розбіжність спливе на інтеграції.
+      - name: Generated API client matches contracts
+        run: |
+          pnpm --filter @baymeister/api-client generate
+          # status, а не diff: новий контракт дає новий файл, якого diff не бачить.
+          if [ -n "$(git status --porcelain -- packages/api-client/src/generated)" ]; then
+            git status --short -- packages/api-client/src/generated
+            echo "::error::Клієнт застарів: pnpm --filter @baymeister/api-client generate і закомітьте результат"
+            exit 1
+          fi
+
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm --filter @baymeister/shell build
+
+  services:
+    name: Service — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          [
+            customers,
+            identity,
+            gateway,
+            vehicles,
+            catalog,
+            scheduling,
+            work-orders,
+            inventory,
+            procurement,
+          ]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/${{ matrix.service }}/uv.lock
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --group dev --locked
+      - run: uv run ruff check .
+      - run: uv run mypy app
+      - run: uv run pytest -q
