@@ -229,3 +229,30 @@ async def test_mechanic_reads_but_cannot_open(client: AsyncClient) -> None:
         "/work-orders", json={"customer_id": PETRENKO, "vehicle_id": GOLF}, headers=mechanic
     )
     assert denied.status_code == 403
+
+
+async def test_part_events_carry_what_inventory_needs(
+    client: AsyncClient, order: dict[str, Any], monkeypatch: Any
+) -> None:
+    """inventory резервує за подіями: і додавання, і зміна кількості — parts.reserved."""
+    from app import events
+
+    sent: list[tuple[str, dict[str, Any]]] = []
+
+    async def capture(event: str, payload: dict[str, Any]) -> None:
+        sent.append((event, payload))
+
+    monkeypatch.setattr(events, "publish", capture)
+
+    body = (await add(client, order, "part", OIL_5W30, "4")).json()
+    line_id = body["lines"][0]["id"]
+    await client.patch(f"/work-orders/{order['id']}/lines/{line_id}", json={"qty": "5"})
+    await client.delete(f"/work-orders/{order['id']}/lines/{line_id}")
+
+    reserved = [p for e, p in sent if e == "parts.reserved"]
+    assert [p["qty"] for p in reserved] == ["4.000", "5.000"]
+    assert reserved[0]["line_id"] == reserved[1]["line_id"] == line_id
+    assert reserved[0]["name"] == "Олива 5W-30"
+    assert reserved[0]["unit"] == "l"
+    assert reserved[0]["order_number"] == order["number"]
+    assert [e for e, _ in sent][-1] == "parts.released"

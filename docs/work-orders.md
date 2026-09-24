@@ -89,7 +89,11 @@
 | `order.completed` | роботи завершено | `finance` — рахунок; `payroll` — нарахування; `notifications` — «авто готове» |
 | `order.closed` | видано | `analytics` — виручка |
 | `order.cancelled` | скасовано | `inventory` — зняти всі резерви |
-| `parts.reserved` / `parts.released` | додано / прибрано запчастину | `inventory` — резерв на складі |
+| `parts.reserved` | додано запчастину **або змінено її кількість** | `inventory` — один резерв на рядок, новіша подія перемагає |
+| `parts.released` | прибрано запчастину | `inventory` — зняти резерв |
+
+`parts.reserved` несе номер наряду, код, назву й одиницю деталі — склад може
+завести картку деталі, якої ще не бачив, без запиту до `catalog`.
 
 Слухає `customer.updated` і `vehicle.updated` — оновлює копії імені, телефону й
 держномера, як `vehicles` і `scheduling`.

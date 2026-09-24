@@ -9,6 +9,7 @@ from app import events, repository
 from app.api.auth import Principal, require
 from app.db import get_session
 from app.models import EDITABLE_STATUSES
+from app.models import Line as LineModel
 from app.models import Order as OrderModel
 from app.peers import (
     BLOCK_TITLE,
@@ -126,6 +127,24 @@ def _out(order: OrderModel) -> Order:
             total=t.total,
         ),
     )
+
+
+def _reservation_event(order: OrderModel, line: LineModel) -> dict[str, str]:
+    """
+    Резерв рядка під наряд. Та сама подія — і на додавання, і на зміну
+    кількості: inventory тримає один резерв на рядок і бере новіший.
+    Назва й одиниця — щоб склад міг завести картку деталі, якої ще не бачив.
+    """
+    return {
+        "order_id": str(order.id),
+        "order_number": order.number,
+        "line_id": str(line.id),
+        "part_id": str(line.catalog_id),
+        "code": line.code,
+        "name": line.name,
+        "unit": line.unit,
+        "qty": f"{line.qty:.3f}",
+    }
 
 
 def _event(order: OrderModel) -> dict[str, object]:
@@ -333,15 +352,7 @@ async def add_line(
 
     if data.kind == "part":
         # inventory резервує деталь під наряд.
-        await events.publish(
-            "parts.reserved",
-            {
-                "order_id": str(order.id),
-                "line_id": str(line.id),
-                "part_id": str(line.catalog_id),
-                "qty": f"{line.qty:.3f}",
-            },
-        )
+        await events.publish("parts.reserved", _reservation_event(order, line))
     return _out(order)
 
 
@@ -366,7 +377,12 @@ async def update_line(
     line = await _line_or_404(order, line_id)
     line.qty = data.qty
     await session.commit()
-    return _out(await repository.reload(session, order))
+    order = await repository.reload(session, order)
+
+    if line.kind == "part":
+        # Інакше склад тримав би резерв на стару кількість.
+        await events.publish("parts.reserved", _reservation_event(order, line))
+    return _out(order)
 
 
 @router.delete(

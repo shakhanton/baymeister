@@ -214,6 +214,17 @@ async def archive_service(service_id: uuid.UUID, _: CanWrite, session: Session) 
 # ── Запчастини ──────────────────────────────────────────────────────────────
 
 
+def _part_event(part: PartModel) -> dict[str, str]:
+    """Усе, що потрібно inventory для картки номенклатури, — без запиту назад."""
+    return {
+        "id": str(part.id),
+        "sku": part.sku,
+        "brand": part.brand,
+        "name": part.name,
+        "unit": part.unit,
+    }
+
+
 async def _get_part_or_404(session: AsyncSession, part_id: uuid.UUID) -> PartModel:
     part = await repository.get_part(session, part_id)
     if part is None:
@@ -255,7 +266,7 @@ async def create_part(data: PartCreate, _: CanWrite, session: Session) -> Part:
     part = await repository.create_part(session, data)
     await session.commit()
 
-    await events.publish("part.created", {"id": str(part.id), "sku": part.sku, "brand": part.brand})
+    await events.publish("part.created", _part_event(part))
     return Part.model_validate(part)
 
 
@@ -291,7 +302,7 @@ async def update_part(part_id: uuid.UUID, data: PartUpdate, _: CanWrite, session
     part = await repository.update_part(session, part, data)
     await session.commit()
 
-    await events.publish("part.updated", {"id": str(part.id), "sku": part.sku, "brand": part.brand})
+    await events.publish("part.updated", _part_event(part))
     if part.price != old_price:
         await events.publish(
             "part.price_changed",

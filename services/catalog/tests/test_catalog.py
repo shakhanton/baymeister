@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from httpx import AsyncClient
 
@@ -212,3 +213,30 @@ async def test_mechanic_reads_but_cannot_change_prices(client: AsyncClient) -> N
     denied = await client.put("/catalog/labor-rate", json={"amount": "1"}, headers=mechanic)
     assert denied.status_code == 403
     assert "catalog.write" in denied.json()["detail"]
+
+
+async def test_part_events_carry_name_and_unit(client: AsyncClient, monkeypatch: Any) -> None:
+    """inventory веде картку номенклатури за цими подіями — без запиту назад."""
+    from app import events
+
+    sent: list[tuple[str, dict[str, Any]]] = []
+
+    async def capture(event: str, payload: dict[str, Any]) -> None:
+        sent.append((event, payload))
+
+    monkeypatch.setattr(events, "publish", capture)
+    created = (await client.post("/catalog/parts", json=FILTER)).json()
+    await client.patch(f"/catalog/parts/{created['id']}", json={"name": "Фільтр оливи"})
+
+    assert sent[0] == (
+        "part.created",
+        {
+            "id": created["id"],
+            "sku": "OC90",
+            "brand": "MAHLE",
+            "name": "Фільтр оливний",
+            "unit": "pcs",
+        },
+    )
+    assert sent[1][0] == "part.updated"
+    assert sent[1][1]["name"] == "Фільтр оливи"

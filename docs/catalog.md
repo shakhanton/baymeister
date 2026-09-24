@@ -79,7 +79,8 @@
 |---|---|---|
 | `labor_rate.changed` | нова ставка | `analytics` — динаміка ціни нормо-години |
 | `service.created` / `updated` / `archived` | зміни робіт | `documents` — прайс для друку |
-| `part.created` / `updated` / `archived` | зміни запчастин | `inventory` — картка номенклатури |
+| `part.created` / `updated` | зміни запчастин | `inventory` — картка номенклатури: артикул, бренд, назва, одиниця |
+| `part.archived` | запчастину архівовано | `inventory` |
 | `part.price_changed` | змінилась ціна запчастини | `analytics`; `inventory` — переоцінка |
 
 ## Запуск
