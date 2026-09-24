@@ -14,6 +14,7 @@ class Settings(BaseSettings):
         "customers": "http://localhost:8001",
         "vehicles": "http://localhost:8003",
         "catalog": "http://localhost:8004",
+        "scheduling": "http://localhost:8005",
     }
 
     # Звідки брати публічні ключі для перевірки токенів.
