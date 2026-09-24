@@ -58,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [customers, identity, gateway, vehicles]
+        service: [customers, identity, gateway, vehicles, catalog]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}

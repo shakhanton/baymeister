@@ -3,6 +3,8 @@
 CREATE DATABASE customers OWNER baymeister;
 CREATE DATABASE identity  OWNER baymeister;
 CREATE DATABASE vehicles  OWNER baymeister;
+CREATE DATABASE catalog   OWNER baymeister;
 
 -- Далі, у міру появи блоків:
--- CREATE DATABASE catalog    OWNER baymeister;
+-- CREATE DATABASE scheduling  OWNER baymeister;
+-- CREATE DATABASE work_orders OWNER baymeister;

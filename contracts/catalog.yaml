@@ -1,0 +1,566 @@
+openapi: 3.1.0
+
+info:
+  title: Baymeister — Послуги та прайс
+  version: 1.0.0
+  description: |
+    Блок `catalog`. Володіє тим, що автосервіс продає: роботами з нормо-годинами,
+    вартістю нормо-години і каталогом запчастин із цінами.
+
+    Ціна роботи = нормо-години × вартість нормо-години, якщо в роботи немає
+    фіксованої ціни. Вартість нормо-години має історію: наряд, відкритий учора,
+    рахується за вчорашньою ставкою.
+
+    Гроші передаються рядком із двома знаками після коми (`"850.00"`), а не
+    числом — щоб жоден клієнт не округлив копійки через float.
+
+    Що блок НЕ робить: не знає залишків на складі (блок `inventory`) і не
+    зберігає, що саме зробили в наряді (блок `work-orders`). `work-orders` бере
+    ціну на момент додавання роботи й зберігає її в себе — зміна прайсу не
+    переписує старі наряди.
+
+servers:
+  - url: /api
+    description: Gateway маршрутизує все під /api/catalog у цей сервіс.
+
+tags:
+  - name: services
+    description: Роботи
+  - name: parts
+    description: Запчастини
+  - name: labor-rate
+    description: Вартість нормо-години
+  - name: health
+    description: Службові
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Перевірка живості сервісу
+      security: []
+      responses:
+        "200":
+          description: Сервіс живий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /catalog/labor-rate:
+    get:
+      tags: [labor-rate]
+      operationId: getLaborRate
+      summary: Вартість нормо-години
+      description: |
+        Потрібне право `catalog.read`. Без `at` — поточна ставка; з `at` — та,
+        що діяла в цей момент.
+      parameters:
+        - name: at
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Ставка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaborRate" }
+        "404":
+          description: Ставку ще не задано або на цей момент її не було
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+    put:
+      tags: [labor-rate]
+      operationId: setLaborRate
+      summary: Нова вартість нормо-години
+      description: |
+        Потрібне право `catalog.write`. Не змінює стару ставку, а додає нову з
+        моменту `effective_from` (за замовчуванням — зараз).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LaborRateCreate" }
+      responses:
+        "200":
+          description: Нова ставка
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaborRate" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/labor-rate/history:
+    get:
+      tags: [labor-rate]
+      operationId: listLaborRates
+      summary: Історія ставок, від нових до старих
+      description: Потрібне право `catalog.read`.
+      responses:
+        "200":
+          description: Ставки
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LaborRate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/services:
+    get:
+      tags: [services]
+      operationId: listServices
+      summary: Роботи з поточною ціною
+      description: Потрібне право `catalog.read`.
+      parameters:
+        - name: search
+          in: query
+          description: Пошук за кодом, назвою або категорією
+          schema: { type: string, maxLength: 120 }
+        - name: category
+          in: query
+          schema: { type: string, maxLength: 60 }
+        - name: archived
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Сторінка результатів
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServicePage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+    post:
+      tags: [services]
+      operationId: createService
+      summary: Додати роботу
+      description: Потрібне право `catalog.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceCreate" }
+      responses:
+        "201":
+          description: Роботу створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Service" }
+        "409":
+          description: Робота з таким кодом уже існує
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/services/{serviceId}:
+    parameters:
+      - $ref: "#/components/parameters/ServiceId"
+    get:
+      tags: [services]
+      operationId: getService
+      summary: Робота за ідентифікатором
+      description: Потрібне право `catalog.read`.
+      responses:
+        "200":
+          description: Робота
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Service" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [services]
+      operationId: updateService
+      summary: Змінити роботу
+      description: Потрібне право `catalog.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceUpdate" }
+      responses:
+        "200":
+          description: Оновлена робота
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Service" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Код зайнятий іншою роботою
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/services/{serviceId}/archive:
+    parameters:
+      - $ref: "#/components/parameters/ServiceId"
+    post:
+      tags: [services]
+      operationId: archiveService
+      summary: Архівувати роботу
+      description: Потрібне право `catalog.write`. Старі наряди на неї посилаються.
+      responses:
+        "200":
+          description: Архівована робота
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Service" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/parts:
+    get:
+      tags: [parts]
+      operationId: listParts
+      summary: Каталог запчастин
+      description: Потрібне право `catalog.read`.
+      parameters:
+        - name: search
+          in: query
+          description: Пошук за артикулом, назвою або брендом
+          schema: { type: string, maxLength: 120 }
+        - name: archived
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Сторінка результатів
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+    post:
+      tags: [parts]
+      operationId: createPart
+      summary: Додати запчастину
+      description: Потрібне право `catalog.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartCreate" }
+      responses:
+        "201":
+          description: Запчастину створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Part" }
+        "409":
+          description: Запчастина з таким артикулом і брендом уже існує
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/parts/{partId}:
+    parameters:
+      - $ref: "#/components/parameters/PartId"
+    get:
+      tags: [parts]
+      operationId: getPart
+      summary: Запчастина за ідентифікатором
+      description: Потрібне право `catalog.read`.
+      responses:
+        "200":
+          description: Запчастина
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Part" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [parts]
+      operationId: updatePart
+      summary: Змінити запчастину
+      description: Потрібне право `catalog.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartUpdate" }
+      responses:
+        "200":
+          description: Оновлена запчастина
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Part" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Артикул і бренд зайняті іншою запчастиною
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/parts/{partId}/archive:
+    parameters:
+      - $ref: "#/components/parameters/PartId"
+    post:
+      tags: [parts]
+      operationId: archivePart
+      summary: Архівувати запчастину
+      description: Потрібне право `catalog.write`.
+      responses:
+        "200":
+          description: Архівована запчастина
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Part" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен видає блок `identity`, перевіряє gateway.
+
+  parameters:
+    ServiceId:
+      name: serviceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PartId:
+      name: partId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+
+  responses:
+    Unauthorized:
+      description: Немає або недійсний токен
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: |
+        Бракує права: читання потребує `catalog.read`, зміни — `catalog.write`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Не знайдено
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Дані не пройшли валідацію
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Money:
+      type: string
+      pattern: "^\\d{1,9}\\.\\d{2}$"
+      description: Гривні з копійками, рядком
+      examples: ["850.00"]
+
+    MoneyInput:
+      type: string
+      pattern: "^\\d{1,9}([.,]\\d{1,2})?$"
+      description: Приймається й «850», «850,5» — зберігається як «850.50»
+      examples: ["850"]
+
+    Hours:
+      type: string
+      pattern: "^\\d{1,3}\\.\\d{2}$"
+      description: Нормо-години з точністю до сотих
+      examples: ["1.50"]
+
+    LaborRate:
+      type: object
+      required: [id, amount, effective_from, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { $ref: "#/components/schemas/Money" }
+        effective_from: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    LaborRateCreate:
+      type: object
+      required: [amount]
+      properties:
+        amount: { $ref: "#/components/schemas/MoneyInput" }
+        effective_from:
+          type: [string, "null"]
+          format: date-time
+          description: З якого моменту діє. За замовчуванням — зараз.
+
+    Service:
+      type: object
+      required:
+        [id, code, name, category, norm_hours, price, price_source, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        code:
+          type: string
+          description: Короткий код роботи, унікальний серед активних
+          examples: ["ENG-OIL"]
+        name: { type: string, examples: ["Заміна моторної оливи"] }
+        category: { type: string, examples: ["Двигун"] }
+        norm_hours: { $ref: "#/components/schemas/Hours" }
+        fixed_price:
+          description: Якщо задана — ціна не залежить від ставки
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        price:
+          description: Поточна ціна; null, якщо ставку ще не задано й фіксованої немає
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        price_source:
+          type: string
+          enum: [fixed, norm_hours, unknown]
+          description: Звідки взялася ціна
+        archived_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ServiceCreate:
+      type: object
+      required: [code, name, category, norm_hours]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 20 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        category: { type: string, minLength: 1, maxLength: 60 }
+        norm_hours: { type: string, pattern: "^\\d{1,3}([.,]\\d{1,2})?$" }
+        fixed_price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyInput"
+            - type: "null"
+
+    ServiceUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        code: { type: string, minLength: 1, maxLength: 20 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        category: { type: string, minLength: 1, maxLength: 60 }
+        norm_hours: { type: string, pattern: "^\\d{1,3}([.,]\\d{1,2})?$" }
+        fixed_price:
+          oneOf:
+            - $ref: "#/components/schemas/MoneyInput"
+            - type: "null"
+
+    ServicePage:
+      type: object
+      required: [items, total, limit, offset, labor_rate]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Service" }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+        labor_rate:
+          description: Ставка, за якою пораховано ціни в цій відповіді
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+
+    Part:
+      type: object
+      required: [id, sku, brand, name, unit, price, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        sku:
+          type: string
+          description: Артикул виробника, у верхньому регістрі без пробілів
+          examples: ["OC90"]
+        brand: { type: string, examples: ["MAHLE"] }
+        name: { type: string, examples: ["Фільтр оливний"] }
+        unit:
+          type: string
+          enum: [pcs, l, kg, m, set]
+          description: "`pcs` — шт., `l` — л, `kg` — кг, `m` — м, `set` — компл."
+        price: { $ref: "#/components/schemas/Money" }
+        archived_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PartCreate:
+      type: object
+      required: [sku, brand, name, unit, price]
+      properties:
+        sku: { type: string, minLength: 1, maxLength: 40 }
+        brand: { type: string, minLength: 1, maxLength: 60 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        unit: { type: string, enum: [pcs, l, kg, m, set] }
+        price: { $ref: "#/components/schemas/MoneyInput" }
+
+    PartUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        sku: { type: string, minLength: 1, maxLength: 40 }
+        brand: { type: string, minLength: 1, maxLength: 60 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        unit: { type: string, enum: [pcs, l, kg, m, set] }
+        price: { $ref: "#/components/schemas/MoneyInput" }
+
+    PartPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Part" }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Повідомлення, придатне для показу користувачу
+          examples: ["Робота з кодом ENG-OIL уже існує"]
+
+security:
+  - bearerAuth: []

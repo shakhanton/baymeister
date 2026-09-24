@@ -1,9 +1,11 @@
 import createClient, { type Middleware } from 'openapi-fetch';
+import type { paths as CatalogPaths } from './generated/catalog';
 import type { paths as CustomersPaths } from './generated/customers';
 import type { paths as IdentityPaths } from './generated/identity';
 import type { paths as VehiclesPaths } from './generated/vehicles';
 
-export type { CustomersPaths, IdentityPaths, VehiclesPaths };
+export type { CatalogPaths, CustomersPaths, IdentityPaths, VehiclesPaths };
+export type { components as CatalogSchemas } from './generated/catalog';
 export type { components as CustomersSchemas } from './generated/customers';
 export type { components as IdentitySchemas } from './generated/identity';
 export type { components as VehiclesSchemas } from './generated/vehicles';
@@ -58,3 +60,6 @@ export const identityApi = makeClient<IdentityPaths>();
 
 /** Клієнт блоку `vehicles`. Типи згенеровані з contracts/vehicles.yaml. */
 export const vehiclesApi = makeClient<VehiclesPaths>();
+
+/** Клієнт блоку `catalog`. Типи згенеровані з contracts/catalog.yaml. */
+export const catalogApi = makeClient<CatalogPaths>();
