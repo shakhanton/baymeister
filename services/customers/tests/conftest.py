@@ -31,10 +31,24 @@ async def session() -> AsyncIterator[AsyncSession]:
     await engine.dispose()
 
 
+def as_user(permissions: str) -> dict[str, str]:
+    """Заголовки, які gateway виставляє після перевірки токена."""
+    return {
+        "X-User-Id": "00000000-0000-0000-0000-0000000000aa",
+        "X-User-Role": "manager",
+        "X-User-Permissions": permissions,
+    }
+
+
 @pytest.fixture
 async def client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
+    """Клієнт від імені адміністратора з правами на блок."""
     app.dependency_overrides[get_session] = lambda: session
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers=as_user("customers.read,customers.write"),
+    ) as c:
         yield c
     app.dependency_overrides.clear()

@@ -5,12 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import events, repository
+from app.api.auth import Principal, require
 from app.db import get_session
 from app.schemas import Customer, CustomerCreate, CustomerPage, CustomerUpdate, Error
 
 router = APIRouter()
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+CanRead = Annotated[Principal, Depends(require("customers.read"))]
+CanWrite = Annotated[Principal, Depends(require("customers.write"))]
 
 NOT_FOUND = {"model": Error, "description": "Клієнта не знайдено"}
 CONFLICT = {"model": Error, "description": "Телефон зайнятий"}
@@ -18,6 +21,7 @@ CONFLICT = {"model": Error, "description": "Телефон зайнятий"}
 
 @router.get("/customers", response_model=CustomerPage, tags=["customers"])
 async def list_customers(
+    _: CanRead,
     session: Session,
     search: Annotated[str | None, Query(max_length=120)] = None,
     type: Annotated[Literal["individual", "company"] | None, Query()] = None,
@@ -43,7 +47,7 @@ async def list_customers(
     responses={409: CONFLICT},
     tags=["customers"],
 )
-async def create_customer(data: CustomerCreate, session: Session) -> Customer:
+async def create_customer(data: CustomerCreate, _: CanWrite, session: Session) -> Customer:
     if await repository.get_by_phone(session, data.phone):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -66,7 +70,7 @@ async def create_customer(data: CustomerCreate, session: Session) -> Customer:
     responses={404: NOT_FOUND},
     tags=["customers"],
 )
-async def get_customer(customer_id: uuid.UUID, session: Session) -> Customer:
+async def get_customer(customer_id: uuid.UUID, _: CanRead, session: Session) -> Customer:
     customer = await repository.get(session, customer_id)
     if customer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Клієнта не знайдено")
@@ -80,7 +84,7 @@ async def get_customer(customer_id: uuid.UUID, session: Session) -> Customer:
     tags=["customers"],
 )
 async def update_customer(
-    customer_id: uuid.UUID, data: CustomerUpdate, session: Session
+    customer_id: uuid.UUID, data: CustomerUpdate, _: CanWrite, session: Session
 ) -> Customer:
     customer = await repository.get(session, customer_id)
     if customer is None:
@@ -111,7 +115,7 @@ async def update_customer(
     responses={404: NOT_FOUND},
     tags=["customers"],
 )
-async def archive_customer(customer_id: uuid.UUID, session: Session) -> Customer:
+async def archive_customer(customer_id: uuid.UUID, _: CanWrite, session: Session) -> Customer:
     customer = await repository.get(session, customer_id)
     if customer is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Клієнта не знайдено")

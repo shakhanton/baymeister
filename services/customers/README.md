@@ -21,7 +21,7 @@ uv run uvicorn app.main:app --reload --port 8001
 ## Перевірки
 
 ```bash
-uv run pytest        # 11 тестів, SQLite у пам'яті, без зовнішніх залежностей
+uv run pytest        # 13 тестів, SQLite у пам'яті, без зовнішніх залежностей
 uv run ruff check .
 uv run mypy app
 ```
@@ -54,6 +54,7 @@ app/db.py          сесія SQLAlchemy, власна схема
 app/models.py      таблиця customers
 app/schemas.py     Pydantic — вони ж джерело OpenAPI
 app/repository.py  запити до бази, без HTTP
+app/api/auth.py    хто робить запит і чи має право — з заголовків X-User-*
 app/api/routes.py  ендпоінти, без SQL
 app/events.py      публікація подій у шину
 alembic/           міграції
