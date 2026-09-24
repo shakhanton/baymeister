@@ -126,4 +126,4 @@ pnpm --filter @baymeister/module-work-orders typecheck
 - Механік на рядок роботи й хронометраж — для `payroll`.
 - Друк наряду й акту — блок `documents`.
 - Оплата — блок `finance` слухає `order.completed`.
-- Резерв на складі — блок `inventory` слухає `parts.reserved`.
+- ~~Резерв на складі~~ — зроблено в блоці `inventory` ([docs/inventory.md](inventory.md)).

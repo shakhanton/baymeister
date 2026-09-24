@@ -15,6 +15,7 @@
     "@baymeister/module-catalog": "workspace:*",
     "@baymeister/module-customers": "workspace:*",
     "@baymeister/module-identity": "workspace:*",
+    "@baymeister/module-inventory": "workspace:*",
     "@baymeister/module-kit": "workspace:*",
     "@baymeister/module-scheduling": "workspace:*",
     "@baymeister/module-vehicles": "workspace:*",
