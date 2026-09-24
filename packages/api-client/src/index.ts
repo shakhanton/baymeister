@@ -1,10 +1,12 @@
 import createClient, { type Middleware } from 'openapi-fetch';
 import type { paths as CustomersPaths } from './generated/customers';
 import type { paths as IdentityPaths } from './generated/identity';
+import type { paths as VehiclesPaths } from './generated/vehicles';
 
-export type { CustomersPaths, IdentityPaths };
+export type { CustomersPaths, IdentityPaths, VehiclesPaths };
 export type { components as CustomersSchemas } from './generated/customers';
 export type { components as IdentitySchemas } from './generated/identity';
+export type { components as VehiclesSchemas } from './generated/vehicles';
 
 /**
  * Усі запити йдуть через gateway — жодного прямого звернення до сервісу.
@@ -53,3 +55,6 @@ export const customersApi = makeClient<CustomersPaths>();
 
 /** Клієнт блоку `identity`. Типи згенеровані з contracts/identity.yaml. */
 export const identityApi = makeClient<IdentityPaths>();
+
+/** Клієнт блоку `vehicles`. Типи згенеровані з contracts/vehicles.yaml. */
+export const vehiclesApi = makeClient<VehiclesPaths>();

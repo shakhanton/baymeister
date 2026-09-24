@@ -40,8 +40,12 @@ jobs:
       - name: Generated API client matches contracts
         run: |
           pnpm --filter @baymeister/api-client generate
-          git diff --exit-code -- packages/api-client/src/generated \
-            || { echo "::error::Клієнт застарів: pnpm --filter @baymeister/api-client generate і закомітьте результат"; exit 1; }
+          # status, а не diff: новий контракт дає новий файл, якого diff не бачить.
+          if [ -n "$(git status --porcelain -- packages/api-client/src/generated)" ]; then
+            git status --short -- packages/api-client/src/generated
+            echo "::error::Клієнт застарів: pnpm --filter @baymeister/api-client generate і закомітьте результат"
+            exit 1
+          fi
 
       - run: pnpm -r lint
       - run: pnpm -r typecheck
