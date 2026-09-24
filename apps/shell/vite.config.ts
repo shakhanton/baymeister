@@ -7,13 +7,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // У дев-режимі роль gateway виконує цей проксі: маршрутизує за першим
-      // сегментом шляху і зрізає /api. Кожен новий блок додає сюди рядок,
-      // поки не з'явиться справжній gateway на :8000.
-      '/api/customers': {
-        target: 'http://localhost:8001',
+      // Усі запити — через gateway, як у проді. Він сам маршрутизує за блоком
+      // і перевіряє токен; новий блок підключається в gateway, не тут.
+      '/api': {
+        target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },

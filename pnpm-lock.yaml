@@ -175,9 +175,15 @@ importers:
 
   apps/shell:
     dependencies:
+      '@baymeister/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@baymeister/module-customers':
         specifier: workspace:*
         version: link:../../packages/modules/customers
+      '@baymeister/module-identity':
+        specifier: workspace:*
+        version: link:../../packages/modules/identity
       '@baymeister/module-kit':
         specifier: workspace:*
         version: link:../../packages/module-kit
@@ -252,6 +258,43 @@ importers:
         version: 5.9.3
 
   packages/modules/customers:
+    dependencies:
+      '@baymeister/api-client':
+        specifier: workspace:*
+        version: link:../../api-client
+      '@baymeister/module-kit':
+        specifier: workspace:*
+        version: link:../../module-kit
+      '@baymeister/ui':
+        specifier: workspace:*
+        version: link:../../ui
+      '@hookform/resolvers':
+        specifier: ^3.10.0
+        version: 3.10.0(react-hook-form@7.88.0(react@19.3.0))
+      react-hook-form:
+        specifier: ^7.54.2
+        version: 7.88.0(react@19.3.0)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.66.0
+        version: 5.103.1(react@19.3.0)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+      react-router:
+        specifier: ^7.1.5
+        version: 7.18.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/modules/identity:
     dependencies:
       '@baymeister/api-client':
         specifier: workspace:*

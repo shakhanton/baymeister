@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@baymeister/api-client": "workspace:*",
     "@baymeister/module-customers": "workspace:*",
+    "@baymeister/module-identity": "workspace:*",
     "@baymeister/module-kit": "workspace:*",
     "@baymeister/ui": "workspace:*",
     "@tanstack/react-query": "^5.66.0",

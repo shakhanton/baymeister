@@ -1,15 +1,10 @@
 import { navSections } from '@baymeister/module-kit';
 import { cn } from '@baymeister/ui';
 import { NavLink } from 'react-router';
-import { usePermissions } from '../auth/permissions';
+import { useCan } from '../auth/permissions';
 import { registry } from '../modules/registry';
 import { Icon } from './icon';
 import { NavItem } from './nav-item';
-
-function useCan() {
-  const all = usePermissions(['*']);
-  return (required: string[]) => all || required.length === 0;
-}
 
 export function Sidebar() {
   const can = useCan();

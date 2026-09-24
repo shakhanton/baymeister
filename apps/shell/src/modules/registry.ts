@@ -1,6 +1,7 @@
 import type { AppModule } from '@baymeister/module-kit';
 import { assertRegistryIsValid } from '@baymeister/module-kit';
 import { customersModule } from '@baymeister/module-customers';
+import { identityModule } from '@baymeister/module-identity';
 
 /**
  * Реєстр модулів — єдине джерело правди про склад продукту.
@@ -141,16 +142,7 @@ export const registry: AppModule[] = [
   },
 
   // ── Налаштування ────────────────────────────────────────────────────────
-  {
-    id: 'identity',
-    title: 'Користувачі та ролі',
-    icon: 'user-cog',
-    status: 'planned',
-    nav: { group: 'settings', order: 10 },
-    permissions: ['identity.read'],
-    routes: [],
-    description: 'Співробітники, ролі, права доступу, сесії.',
-  },
+  identityModule,
   {
     id: 'notifications',
     title: 'Сповіщення',

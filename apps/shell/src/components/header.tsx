@@ -1,4 +1,5 @@
-import { useAuth } from '../auth/permissions';
+import { Button } from '@baymeister/ui';
+import { logout, useAuth } from '../auth/permissions';
 
 export function Header({ title }: { title: string }) {
   const user = useAuth((s) => s.user);
@@ -15,6 +16,9 @@ export function Header({ title }: { title: string }) {
           >
             {user.name.slice(0, 2).toUpperCase()}
           </span>
+          <Button variant="ghost" size="sm" onClick={logout}>
+            Вийти
+          </Button>
         </div>
       ) : null}
     </header>

@@ -1,22 +1,24 @@
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState } from '@baymeister/ui';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { useCreateCustomer, useCustomers, type CustomerType } from '../api';
-import { CustomerForm, type CustomerFormValues } from '../components/customer-form';
+import { useCreateUser, useRoles, useUsers } from '../api';
+import { UserForm, type UserFormValues } from '../components/user-form';
 
 const PAGE_SIZE = 25;
 
-export default function CustomersList() {
+export default function UsersList() {
   const [params, setParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
 
   const search = params.get('search') ?? '';
-  const type = (params.get('type') as CustomerType | null) ?? undefined;
-  const archived = params.get('archived') === '1';
+  const inactive = params.get('inactive') === '1';
   const offset = Number(params.get('offset') ?? 0);
 
-  const query = useCustomers({ search: search || undefined, type, archived, limit: PAGE_SIZE, offset });
-  const create = useCreateCustomer();
+  const query = useUsers({ search: search || undefined, inactive, limit: PAGE_SIZE, offset });
+  const roles = useRoles();
+  const create = useCreateUser();
+
+  const roleTitle = new Map(roles.data?.map((r) => [r.id, r.title]));
 
   function patchParams(next: Record<string, string | null>) {
     const merged = new URLSearchParams(params);
@@ -28,18 +30,9 @@ export default function CustomersList() {
     setParams(merged, { replace: true });
   }
 
-  function handleCreate(values: CustomerFormValues) {
-    const body = {
-      type: values.type,
-      name: values.name,
-      phone: values.phone,
-      email: values.email || null,
-      tax_id: values.tax_id || null,
-      notes: values.notes || null,
-      discount_percent: values.discount_percent,
-    };
+  function handleCreate(values: UserFormValues) {
     // Помилку показує форма через create.error — тут її не ловимо.
-    create.mutate(body, { onSuccess: () => setCreating(false) });
+    create.mutate(values, { onSuccess: () => setCreating(false) });
   }
 
   return (
@@ -49,43 +42,33 @@ export default function CustomersList() {
           type="search"
           value={search}
           onChange={(e) => patchParams({ search: e.target.value })}
-          placeholder="Імʼя, телефон або код"
-          aria-label="Пошук клієнтів"
+          placeholder="Імʼя або email"
+          aria-label="Пошук співробітників"
           className="h-9 w-64 rounded-bm border border-line-strong bg-surface px-3 text-sm placeholder:text-ink-faint"
         />
-
-        <select
-          value={type ?? ''}
-          onChange={(e) => patchParams({ type: e.target.value || null })}
-          aria-label="Тип клієнта"
-          className="h-9 rounded-bm border border-line-strong bg-surface px-3 text-sm"
-        >
-          <option value="">Усі типи</option>
-          <option value="individual">Фізичні особи</option>
-          <option value="company">Юридичні особи</option>
-        </select>
 
         <label className="flex items-center gap-2 text-sm text-ink-muted">
           <input
             type="checkbox"
-            checked={archived}
-            onChange={(e) => patchParams({ archived: e.target.checked ? '1' : null })}
+            checked={inactive}
+            onChange={(e) => patchParams({ inactive: e.target.checked ? '1' : null })}
           />
-          Архів
+          Вимкнені
         </label>
 
         <Button className="ml-auto" onClick={() => setCreating((v) => !v)}>
-          {creating ? 'Згорнути' : 'Додати клієнта'}
+          {creating ? 'Згорнути' : 'Додати співробітника'}
         </Button>
       </div>
 
       {creating ? (
         <Card>
           <CardHeader>
-            <CardTitle>Новий клієнт</CardTitle>
+            <CardTitle>Новий співробітник</CardTitle>
           </CardHeader>
           <CardBody>
-            <CustomerForm
+            <UserForm
+              mode="create"
               submitLabel="Створити"
               pending={create.isPending}
               error={create.error?.message ?? null}
@@ -106,11 +89,11 @@ export default function CustomersList() {
 
       {query.data && query.data.items.length === 0 ? (
         <EmptyState
-          title={search ? 'Нічого не знайдено' : archived ? 'Архів порожній' : 'Клієнтів ще немає'}
+          title={search ? 'Нічого не знайдено' : inactive ? 'Вимкнених немає' : 'Співробітників ще немає'}
           description={
             search
               ? 'Спробуйте інший запит або очистіть фільтри.'
-              : 'Перший клієнт зʼявиться тут одразу після створення.'
+              : 'Новий співробітник зʼявиться тут одразу після створення.'
           }
         />
       ) : null}
@@ -121,7 +104,7 @@ export default function CustomersList() {
             <table className="w-full min-w-[640px] border-collapse text-sm">
               <thead>
                 <tr className="bg-surface-2">
-                  {['Клієнт', 'Телефон', 'Код', 'Знижка'].map((h) => (
+                  {['Співробітник', 'Email', 'Роль', 'Останній вхід'].map((h) => (
                     <th
                       key={h}
                       className="border-b border-line-strong px-4 py-3 text-left font-mono text-[11px] font-medium tracking-wider text-ink-faint uppercase"
@@ -132,25 +115,24 @@ export default function CustomersList() {
                 </tr>
               </thead>
               <tbody>
-                {query.data.items.map((customer) => (
-                  <tr key={customer.id} className="border-b border-line last:border-0">
+                {query.data.items.map((user) => (
+                  <tr key={user.id} className="border-b border-line last:border-0">
                     <td className="px-4 py-3">
                       <Link
-                        to={`/customers/${customer.id}`}
+                        to={`/users/${user.id}`}
                         className="font-medium text-accent hover:underline"
                       >
-                        {customer.name}
+                        {user.name}
                       </Link>
-                      <div className="mt-0.5">
-                        <Badge tone={customer.type === 'company' ? 'accent' : 'neutral'}>
-                          {customer.type === 'company' ? 'юр. особа' : 'фіз. особа'}
-                        </Badge>
-                      </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-ink-muted">{customer.phone}</td>
-                    <td className="px-4 py-3 font-mono text-ink-muted">{customer.tax_id ?? '—'}</td>
+                    <td className="px-4 py-3 font-mono text-ink-muted">{user.email}</td>
+                    <td className="px-4 py-3">
+                      <Badge tone={user.role === 'owner' ? 'accent' : 'neutral'}>
+                        {roleTitle.get(user.role) ?? user.role}
+                      </Badge>
+                    </td>
                     <td className="px-4 py-3 tabular text-ink-muted">
-                      {customer.discount_percent > 0 ? `${customer.discount_percent}%` : '—'}
+                      {user.last_login_at ? formatDate(user.last_login_at) : '—'}
                     </td>
                   </tr>
                 ))}
@@ -167,6 +149,10 @@ export default function CustomersList() {
       ) : null}
     </div>
   );
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 function Pagination({
