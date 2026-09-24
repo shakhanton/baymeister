@@ -1,0 +1,434 @@
+openapi: 3.1.0
+
+info:
+  title: Baymeister — Користувачі та ролі
+  version: 1.0.0
+  description: |
+    Блок `identity`. Володіє співробітниками автосервісу, їхніми ролями й
+    правами, видає токени доступу.
+
+    Токен — JWT, підписаний RS256. Перевіряє його gateway за публічним ключем з
+    `/identity/.well-known/jwks.json`; решта сервісів токен не розбирає, а
+    читає заголовки `X-User-*`, які gateway виставляє після перевірки.
+
+    Ролі — фіксований каталог у коді сервісу, не таблиця. Право має вигляд
+    `<блок>.<дія>`, напр. `customers.read`; `*` — повний доступ.
+
+    Що блок НЕ робить: не зберігає клієнтів автосервісу (блок `customers`) і не
+    перевіряє права за інші блоки — кожен сервіс вирішує сам, яке право
+    потрібне його ендпоінту.
+
+servers:
+  - url: /api
+    description: |
+      Gateway маршрутизує за першим сегментом шляху: усе під /api/identity
+      потрапляє в цей сервіс.
+
+tags:
+  - name: auth
+    description: Вхід і поточний користувач
+  - name: users
+    description: Співробітники
+  - name: roles
+    description: Каталог ролей
+  - name: health
+    description: Службові
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Перевірка живості сервісу
+      security: []
+      responses:
+        "200":
+          description: Сервіс живий
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /identity/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Вхід за email і паролем
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Токен доступу і поточний користувач
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "401":
+          description: |
+            Невірний email або пароль, або обліковий запис вимкнено. Причину
+            навмисно не уточнюємо — щоб не підказувати, які адреси існують.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /identity/.well-known/jwks.json:
+    get:
+      tags: [auth]
+      operationId: getJwks
+      summary: Публічні ключі для перевірки токенів
+      description: Читає gateway. Кешувати можна; при невідомому `kid` — перечитати.
+      security: []
+      responses:
+        "200":
+          description: JSON Web Key Set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Jwks" }
+
+  /identity/me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: Поточний користувач
+      responses:
+        "200":
+          description: Користувач, від імені якого зроблено запит
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /identity/roles:
+    get:
+      tags: [roles]
+      operationId: listRoles
+      summary: Каталог ролей
+      description: Потрібне право `identity.read`.
+      responses:
+        "200":
+          description: Усі ролі з їхніми правами
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Role" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /identity/users:
+    get:
+      tags: [users]
+      operationId: listUsers
+      summary: Список співробітників
+      description: Потрібне право `identity.read`.
+      parameters:
+        - name: search
+          in: query
+          description: Пошук за іменем або email
+          schema: { type: string, maxLength: 120 }
+        - name: inactive
+          in: query
+          description: Показати вимкнених замість активних
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Сторінка результатів
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+    post:
+      tags: [users]
+      operationId: createUser
+      summary: Додати співробітника
+      description: Потрібне право `identity.write`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreate" }
+      responses:
+        "201":
+          description: Співробітника створено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "409":
+          description: Email уже зайнятий
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /identity/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: Співробітник за ідентифікатором
+      description: Потрібне право `identity.read`.
+      responses:
+        "200":
+          description: Співробітник
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+    patch:
+      tags: [users]
+      operationId: updateUser
+      summary: Змінити співробітника
+      description: |
+        Потрібне право `identity.write`. Передаються тільки поля, що змінюються.
+        Зміна ролі набуває чинності з наступним входом — виданий токен живе до
+        свого `exp`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "200":
+          description: Оновлений співробітник
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Email зайнятий або зміна позбавила б систему останнього власника
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /identity/users/{userId}/deactivate:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [users]
+      operationId: deactivateUser
+      summary: Вимкнути співробітника
+      description: |
+        Потрібне право `identity.write`. М'яке видалення: вхід заборонено, але
+        запис лишається — наряди й табель на нього посилаються.
+      responses:
+        "200":
+          description: Вимкнений співробітник
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Не можна вимкнути себе або останнього власника
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /identity/users/{userId}/activate:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [users]
+      operationId: activateUser
+      summary: Увімкнути співробітника
+      description: Потрібне право `identity.write`.
+      responses:
+        "200":
+          description: Увімкнений співробітник
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Токен видає цей блок, перевіряє gateway.
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Немає або недійсний токен
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Бракує права для цієї дії
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Співробітника не знайдено
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Дані не пройшли валідацію
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    RoleId:
+      type: string
+      enum: [owner, manager, mechanic, cashier, storekeeper]
+      description: |
+        `owner` — власник, повний доступ; `manager` — адміністратор-приймальник;
+        `mechanic` — механік; `cashier` — касир; `storekeeper` — комірник.
+
+    Role:
+      type: object
+      required: [id, title, permissions]
+      properties:
+        id: { $ref: "#/components/schemas/RoleId" }
+        title: { type: string, examples: ["Механік"] }
+        permissions:
+          type: array
+          items: { type: string }
+          examples: [["work_orders.read", "inspections.read", "inspections.write"]]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1, maxLength: 256 }
+
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, const: bearer }
+        expires_in:
+          type: integer
+          description: Скільки секунд токен дійсний
+        user: { $ref: "#/components/schemas/Me" }
+
+    Me:
+      type: object
+      required: [id, email, name, role, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/RoleId" }
+        permissions:
+          type: array
+          items: { type: string }
+          description: Права ролі. `*` означає повний доступ.
+
+    User:
+      type: object
+      required: [id, email, name, role, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name:
+          type: string
+          examples: ["Коваленко Олег"]
+        role: { $ref: "#/components/schemas/RoleId" }
+        is_active: { type: boolean }
+        last_login_at:
+          type: [string, "null"]
+          format: date-time
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    UserCreate:
+      type: object
+      required: [email, name, role, password]
+      properties:
+        email: { type: string, format: email }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        role: { $ref: "#/components/schemas/RoleId" }
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: Початковий пароль. Зберігається тільки хеш.
+
+    UserUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        email: { type: string, format: email }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        role: { $ref: "#/components/schemas/RoleId" }
+        password: { type: string, minLength: 8, maxLength: 256 }
+
+    UserPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/User" }
+        total: { type: integer, description: Усього записів за фільтром }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    Jwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            required: [kty, kid, use, alg, n, e]
+            properties:
+              kty: { type: string, const: RSA }
+              kid: { type: string }
+              use: { type: string, const: sig }
+              alg: { type: string, const: RS256 }
+              n: { type: string }
+              e: { type: string }
+
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Повідомлення, придатне для показу користувачу
+          examples: ["Співробітник з email oleh@example.com уже існує"]
+
+security:
+  - bearerAuth: []
