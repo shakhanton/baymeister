@@ -7,6 +7,7 @@ CREATE DATABASE catalog   OWNER baymeister;
 CREATE DATABASE scheduling OWNER baymeister;
 CREATE DATABASE work_orders OWNER baymeister;
 CREATE DATABASE inventory OWNER baymeister;
+CREATE DATABASE procurement OWNER baymeister;
 
 -- Далі, у міру появи блоків Фази 2:
--- CREATE DATABASE procurement OWNER baymeister;
+-- CREATE DATABASE finance OWNER baymeister;

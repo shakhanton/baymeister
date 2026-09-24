@@ -3,6 +3,7 @@ import type { paths as CatalogPaths } from './generated/catalog';
 import type { paths as CustomersPaths } from './generated/customers';
 import type { paths as IdentityPaths } from './generated/identity';
 import type { paths as InventoryPaths } from './generated/inventory';
+import type { paths as ProcurementPaths } from './generated/procurement';
 import type { paths as SchedulingPaths } from './generated/scheduling';
 import type { paths as VehiclesPaths } from './generated/vehicles';
 import type { paths as WorkOrdersPaths } from './generated/work-orders';
@@ -12,6 +13,7 @@ export type {
   CustomersPaths,
   IdentityPaths,
   InventoryPaths,
+  ProcurementPaths,
   SchedulingPaths,
   VehiclesPaths,
   WorkOrdersPaths,
@@ -20,6 +22,7 @@ export type { components as CatalogSchemas } from './generated/catalog';
 export type { components as CustomersSchemas } from './generated/customers';
 export type { components as IdentitySchemas } from './generated/identity';
 export type { components as InventorySchemas } from './generated/inventory';
+export type { components as ProcurementSchemas } from './generated/procurement';
 export type { components as SchedulingSchemas } from './generated/scheduling';
 export type { components as VehiclesSchemas } from './generated/vehicles';
 export type { components as WorkOrdersSchemas } from './generated/work-orders';
@@ -86,3 +89,6 @@ export const workOrdersApi = makeClient<WorkOrdersPaths>();
 
 /** Клієнт блоку `inventory`. Типи згенеровані з contracts/inventory.yaml. */
 export const inventoryApi = makeClient<InventoryPaths>();
+
+/** Клієнт блоку `procurement`. Типи згенеровані з contracts/procurement.yaml. */
+export const procurementApi = makeClient<ProcurementPaths>();

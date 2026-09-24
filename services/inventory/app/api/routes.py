@@ -66,17 +66,7 @@ async def _item_or_404(session: AsyncSession, part_id: uuid.UUID, *, lock: bool 
 
 
 async def _low_event(item: Item, lv: Levels) -> None:
-    await events.publish(
-        "stock.low",
-        {
-            "part_id": str(item.part_id),
-            "sku": item.sku,
-            "brand": item.brand,
-            "name": item.name,
-            "free": f"{lv.free:.3f}",
-            "min_qty": f"{item.min_qty:.3f}",
-        },
-    )
+    await events.publish("stock.low", stock.low_payload(item, lv))
 
 
 @router.get("/inventory/stock", response_model=StockPage, tags=["stock"])
@@ -231,8 +221,7 @@ async def receive(
     await session.commit()
 
     await events.publish(
-        "stock.received",
-        {"part_id": str(part.id), "qty": f"{data.qty:.3f}", "unit_cost": f"{data.unit_cost:.2f}"},
+        "stock.received", stock.received_payload(item, lv, data.qty, data.unit_cost)
     )
     return _item_out(item, lv)
 

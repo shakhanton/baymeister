@@ -59,7 +59,17 @@ jobs:
       fail-fast: false
       matrix:
         service:
-          [customers, identity, gateway, vehicles, catalog, scheduling, work-orders, inventory]
+          [
+            customers,
+            identity,
+            gateway,
+            vehicles,
+            catalog,
+            scheduling,
+            work-orders,
+            inventory,
+            procurement,
+          ]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}

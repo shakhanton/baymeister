@@ -268,6 +268,7 @@ gateway: він перевіряє токен, маршрутизує і, де �
 | `order.completed` | work-orders | finance створює рахунок; payroll нараховує; analytics оновлює read-модель |
 | `parts.reserved` | work-orders | inventory списує з вільного залишку |
 | `stock.low` | inventory | procurement формує чернетку замовлення |
+| `purchase.received` | procurement | inventory заводить партії за цінами з накладної |
 | `payment.received` | finance | work-orders закриває наряд; documents готує акт |
 
 Кожен слухач обробляє подію ідемпотентно — повторна доставка не повинна

@@ -161,4 +161,12 @@ class Movement(Base):
             postgresql_where=text("kind = 'issue'"),
             sqlite_where=text("kind = 'issue'"),
         ),
+        # Рядок приходу від procurement стає партією один раз.
+        Index(
+            "uq_movements_receipt_line",
+            "line_id",
+            unique=True,
+            postgresql_where=text("kind = 'receipt' and line_id is not null"),
+            sqlite_where=text("kind = 'receipt' and line_id is not null"),
+        ),
     )

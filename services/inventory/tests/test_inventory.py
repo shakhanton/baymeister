@@ -201,3 +201,79 @@ async def test_manager_reads_stock_but_cannot_receive(client: AsyncClient) -> No
         headers=manager,
     )
     assert denied.status_code == 403
+
+
+# ── Прихід від procurement ──────────────────────────────────────────────────
+
+
+def purchase(lines: list[tuple[str, str, str, str]]) -> dict[str, Any]:
+    """lines: (receipt_line_id, part, qty, unit_cost)."""
+    return {
+        "order_id": new_id(),
+        "number": "PO-2026-00007",
+        "supplier": "Автотехнікс",
+        "invoice_number": "РН-118",
+        "lines": [
+            {
+                "receipt_line_id": rid,
+                "part_id": part,
+                "sku": "OC90" if part == FILTER else "5W30-1L",
+                "brand": "MAHLE" if part == FILTER else "CASTROL",
+                "name": "Фільтр оливний" if part == FILTER else "Олива 5W-30",
+                "unit": "pcs" if part == FILTER else "l",
+                "qty": qty,
+                "unit_cost": cost,
+            }
+            for rid, part, qty, cost in lines
+        ],
+    }
+
+
+async def test_purchase_receipt_opens_cards_and_is_applied_once(
+    client: AsyncClient, deliver: Deliver, clock: Clock
+) -> None:
+    event = purchase([(new_id(), FILTER, "6", "175.50"), (new_id(), OIL, "20", "310")])
+    at = clock.tick()
+    out = await deliver("purchase.received", event, at)
+    again = await deliver("purchase.received", event, at)
+
+    assert [e for e, _ in out] == ["stock.received", "stock.received"]
+    assert again == []
+    body = await stock_of(client, FILTER)
+    assert (body["on_hand"], body["value"], body["name"]) == ("6.000", "1053.00", "Фільтр оливний")
+    assert body["lots"][0]["note"] == "PO-2026-00007 · Автотехнікс · накл. РН-118"
+    assert (await stock_of(client, OIL))["on_hand"] == "20.000"
+
+
+async def test_received_tells_whether_part_is_still_low(
+    client: AsyncClient, deliver: Deliver
+) -> None:
+    await receive(client, FILTER, "1", "100")
+    await client.patch(f"/inventory/stock/{FILTER}", json={"min_qty": "5"})
+
+    out = await deliver("purchase.received", purchase([(new_id(), FILTER, "2", "100")]))
+    assert (out[0][1]["free"], out[0][1]["low"]) == ("3.000", True)
+    out = await deliver("purchase.received", purchase([(new_id(), FILTER, "4", "100")]))
+    assert (out[0][1]["free"], out[0][1]["low"]) == ("7.000", False)
+
+
+async def test_low_signal_carries_unit_for_procurement(
+    client: AsyncClient, deliver: Deliver
+) -> None:
+    await receive(client, OIL, "5", "300")
+    await client.patch(f"/inventory/stock/{OIL}", json={"min_qty": "4"})
+    out = await deliver("parts.reserved", reserved(new_id(), new_id(), OIL, "2"))
+    assert out == [
+        (
+            "stock.low",
+            {
+                "part_id": OIL,
+                "sku": "5W30-1L",
+                "brand": "CASTROL",
+                "name": "Олива 5W-30",
+                "unit": "l",
+                "free": "3.000",
+                "min_qty": "4.000",
+            },
+        )
+    ]

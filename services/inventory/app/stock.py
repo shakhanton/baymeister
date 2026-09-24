@@ -36,6 +36,32 @@ def is_low(item: Item, levels: Levels) -> bool:
     return item.min_qty > 0 and levels.free < item.min_qty
 
 
+def low_payload(item: Item, levels: Levels) -> dict[str, str]:
+    """stock.low — procurement заводить за ним потребу, тож деталь описана повністю."""
+    return {
+        "part_id": str(item.part_id),
+        "sku": item.sku,
+        "brand": item.brand,
+        "name": item.name,
+        "unit": item.unit,
+        "free": f"{levels.free:.3f}",
+        "min_qty": f"{item.min_qty:.3f}",
+    }
+
+
+def received_payload(
+    item: Item, levels: Levels, qty: Decimal, unit_cost: Decimal
+) -> dict[str, str | bool]:
+    """stock.received; `low` — чи лишилась деталь нижче мінімуму й після приходу."""
+    return {
+        "part_id": str(item.part_id),
+        "qty": f"{qty:.3f}",
+        "unit_cost": f"{unit_cost:.2f}",
+        "free": f"{levels.free:.3f}",
+        "low": is_low(item, levels),
+    }
+
+
 async def lock(session: AsyncSession, part_id: uuid.UUID) -> Item | None:
     result = await session.execute(select(Item).where(Item.part_id == part_id).with_for_update())
     return result.scalar_one_or_none()
@@ -69,6 +95,7 @@ async def receive(
     source: str,
     note: str | None,
     now: datetime,
+    line_id: uuid.UUID | None = None,
 ) -> Lot:
     lot = Lot(
         part_id=item.part_id,
@@ -87,6 +114,7 @@ async def receive(
             qty=qty,
             cost=quantize(qty * unit_cost),
             note=note,
+            line_id=line_id,
             created_at=now,
         )
     )

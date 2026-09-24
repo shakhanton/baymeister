@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import repository, stock
-from app.models import Item, Reservation
+from app.models import Item, Movement, Reservation
 
 Outgoing = list[tuple[str, dict[str, Any]]]
 
@@ -41,19 +41,7 @@ async def _low_signal(session: AsyncSession, item: Item, was_low: bool) -> Outgo
     """stock.low — лише на перетині порогу вниз, а не на кожну подію під ним."""
     now = await stock.levels(session, item.part_id)
     if stock.is_low(item, now) and not was_low:
-        return [
-            (
-                "stock.low",
-                {
-                    "part_id": str(item.part_id),
-                    "sku": item.sku,
-                    "brand": item.brand,
-                    "name": item.name,
-                    "free": f"{now.free:.3f}",
-                    "min_qty": f"{item.min_qty:.3f}",
-                },
-            )
-        ]
+        return [("stock.low", stock.low_payload(item, now))]
     return []
 
 
@@ -231,6 +219,55 @@ async def on_order_closed(session: AsyncSession, event: dict[str, Any], at: date
     return out
 
 
+async def on_purchase_received(
+    session: AsyncSession, event: dict[str, Any], at: datetime
+) -> Outgoing:
+    """
+    Прихід за накладною постачальника — від procurement.
+
+    Кожен рядок приходу стає партією один раз: рух `receipt` з line_id рядка
+    приходу унікальний, тож повтор події партій не подвоїть.
+    """
+    p = event["payload"]
+    note = f"{p['number']} · {p['supplier']}"
+    if p.get("invoice_number"):
+        note += f" · накл. {p['invoice_number']}"
+    out: Outgoing = []
+    for line in sorted(p["lines"], key=lambda x: x["part_id"]):
+        line_id = uuid.UUID(line["receipt_line_id"])
+        done = await session.scalar(
+            select(Movement.id).where(Movement.kind == "receipt", Movement.line_id == line_id)
+        )
+        if done is not None:
+            continue
+        part_id = uuid.UUID(line["part_id"])
+        await repository.upsert_item(
+            session,
+            part_id=part_id,
+            sku=line["sku"],
+            brand=line["brand"],
+            name=line["name"],
+            unit=line["unit"],
+            synced_at=datetime.min.replace(tzinfo=at.tzinfo),
+        )
+        item = await stock.lock(session, part_id)
+        assert item is not None
+        qty, cost = _qty(line["qty"]), Decimal(line["unit_cost"])
+        await stock.receive(
+            session,
+            item,
+            qty=qty,
+            unit_cost=cost,
+            source="receipt",
+            note=note[:200],
+            now=at,
+            line_id=line_id,
+        )
+        lv = await stock.levels(session, part_id)
+        out.append(("stock.received", stock.received_payload(item, lv, qty, cost)))
+    return out
+
+
 HANDLERS = {
     "part.created": on_part_upsert,
     "part.updated": on_part_upsert,
@@ -238,4 +275,5 @@ HANDLERS = {
     "parts.released": on_parts_released,
     "order.cancelled": on_order_cancelled,
     "order.closed": on_order_closed,
+    "purchase.received": on_purchase_received,
 }
