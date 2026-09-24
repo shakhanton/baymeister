@@ -1,8 +1,8 @@
 """
 Гроші й кількість.
 
-Скопійовано з catalog і доповнено кількістю: у кожного блоку свій код, спільне
-між блоками — лише контракт.
+Скопійовано з work-orders: у кожного блоку свій код, спільне між блоками —
+лише контракт. Тут кількість може бути й нульовою — інвентаризація.
 
 Скрізь Decimal, ніде float: 0.1 + 0.2 у float — не 0.3, а в касі копійка має
 сходитись. Назовні — рядок із рівно двома знаками («850.00»), бо JSON-число
@@ -61,8 +61,6 @@ def _parse_qty(value: object) -> Decimal:
     if not isinstance(value, str) or not _QTY_INPUT.match(value.strip()):
         raise ValueError("Кількість: до 6 цифр і до 3 знаків після коми")
     qty = Decimal(value.strip().replace(",", ".")).quantize(MILLI, rounding=ROUND_HALF_UP)
-    if qty <= 0:
-        raise ValueError("Кількість має бути більшою за нуль")
     return qty
 
 
@@ -74,5 +72,5 @@ Qty = Annotated[
     Decimal,
     BeforeValidator(_parse_qty),
     PlainSerializer(format_3, return_type=str, when_used="json"),
-    WithJsonSchema({"type": "string", "pattern": r"^\d{1,6}\.\d{3}$", "examples": ["1.000"]}),
+    WithJsonSchema({"type": "string", "pattern": r"^-?\d{1,9}\.\d{3}$", "examples": ["1.000"]}),
 ]

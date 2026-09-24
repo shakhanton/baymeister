@@ -24,7 +24,7 @@ Km = Annotated[int, Field(ge=0, le=9_999_999)]
 # Знижка клієнта — рядком, як і гроші: «5.00».
 Percent = Annotated[
     Decimal,
-    PlainSerializer(format_2, return_type=str),
+    PlainSerializer(format_2, return_type=str, when_used="json"),
     WithJsonSchema({"type": "string", "examples": ["5.00"]}),
 ]
 

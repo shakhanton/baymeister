@@ -2,6 +2,7 @@ import createClient, { type Middleware } from 'openapi-fetch';
 import type { paths as CatalogPaths } from './generated/catalog';
 import type { paths as CustomersPaths } from './generated/customers';
 import type { paths as IdentityPaths } from './generated/identity';
+import type { paths as InventoryPaths } from './generated/inventory';
 import type { paths as SchedulingPaths } from './generated/scheduling';
 import type { paths as VehiclesPaths } from './generated/vehicles';
 import type { paths as WorkOrdersPaths } from './generated/work-orders';
@@ -10,6 +11,7 @@ export type {
   CatalogPaths,
   CustomersPaths,
   IdentityPaths,
+  InventoryPaths,
   SchedulingPaths,
   VehiclesPaths,
   WorkOrdersPaths,
@@ -17,6 +19,7 @@ export type {
 export type { components as CatalogSchemas } from './generated/catalog';
 export type { components as CustomersSchemas } from './generated/customers';
 export type { components as IdentitySchemas } from './generated/identity';
+export type { components as InventorySchemas } from './generated/inventory';
 export type { components as SchedulingSchemas } from './generated/scheduling';
 export type { components as VehiclesSchemas } from './generated/vehicles';
 export type { components as WorkOrdersSchemas } from './generated/work-orders';
@@ -80,3 +83,6 @@ export const schedulingApi = makeClient<SchedulingPaths>();
 
 /** Клієнт блоку `work-orders`. Типи згенеровані з contracts/work-orders.yaml. */
 export const workOrdersApi = makeClient<WorkOrdersPaths>();
+
+/** Клієнт блоку `inventory`. Типи згенеровані з contracts/inventory.yaml. */
+export const inventoryApi = makeClient<InventoryPaths>();

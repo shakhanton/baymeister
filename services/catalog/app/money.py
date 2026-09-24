@@ -44,13 +44,13 @@ def format_2(value: Decimal) -> str:
 Money = Annotated[
     Decimal,
     BeforeValidator(_parse(_MONEY_INPUT, "Сума: до 9 цифр і до 2 знаків після коми")),
-    PlainSerializer(format_2, return_type=str),
+    PlainSerializer(format_2, return_type=str, when_used="json"),
     WithJsonSchema({"type": "string", "pattern": r"^\d{1,9}\.\d{2}$", "examples": ["850.00"]}),
 ]
 
 Hours = Annotated[
     Decimal,
     BeforeValidator(_parse(_HOURS_INPUT, "Нормо-години: до 3 цифр і до 2 знаків після коми")),
-    PlainSerializer(format_2, return_type=str),
+    PlainSerializer(format_2, return_type=str, when_used="json"),
     WithJsonSchema({"type": "string", "pattern": r"^\d{1,3}\.\d{2}$", "examples": ["1.50"]}),
 ]
