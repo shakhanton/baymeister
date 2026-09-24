@@ -1,5 +1,6 @@
 import type { AppModule } from '@baymeister/module-kit';
 import { assertRegistryIsValid } from '@baymeister/module-kit';
+import { catalogModule } from '@baymeister/module-catalog';
 import { customersModule } from '@baymeister/module-customers';
 import { identityModule } from '@baymeister/module-identity';
 import { vehiclesModule } from '@baymeister/module-vehicles';
@@ -56,16 +57,7 @@ export const registry: AppModule[] = [
   // ── Довідники ───────────────────────────────────────────────────────────
   customersModule,
   vehiclesModule,
-  {
-    id: 'catalog',
-    title: 'Послуги та прайс',
-    icon: 'book-open',
-    status: 'planned',
-    nav: { group: 'catalog', order: 30 },
-    permissions: ['catalog.read'],
-    routes: [],
-    description: 'Послуги, нормо-години, прайс-листи, каталог запчастин.',
-  },
+  catalogModule,
 
   // ── Склад ───────────────────────────────────────────────────────────────
   {

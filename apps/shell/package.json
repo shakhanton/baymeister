@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@baymeister/api-client": "workspace:*",
+    "@baymeister/module-catalog": "workspace:*",
     "@baymeister/module-customers": "workspace:*",
     "@baymeister/module-identity": "workspace:*",
     "@baymeister/module-kit": "workspace:*",
