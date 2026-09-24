@@ -4,13 +4,22 @@ import type { paths as CustomersPaths } from './generated/customers';
 import type { paths as IdentityPaths } from './generated/identity';
 import type { paths as SchedulingPaths } from './generated/scheduling';
 import type { paths as VehiclesPaths } from './generated/vehicles';
+import type { paths as WorkOrdersPaths } from './generated/work-orders';
 
-export type { CatalogPaths, CustomersPaths, IdentityPaths, SchedulingPaths, VehiclesPaths };
+export type {
+  CatalogPaths,
+  CustomersPaths,
+  IdentityPaths,
+  SchedulingPaths,
+  VehiclesPaths,
+  WorkOrdersPaths,
+};
 export type { components as CatalogSchemas } from './generated/catalog';
 export type { components as CustomersSchemas } from './generated/customers';
 export type { components as IdentitySchemas } from './generated/identity';
 export type { components as SchedulingSchemas } from './generated/scheduling';
 export type { components as VehiclesSchemas } from './generated/vehicles';
+export type { components as WorkOrdersSchemas } from './generated/work-orders';
 
 /**
  * Усі запити йдуть через gateway — жодного прямого звернення до сервісу.
@@ -68,3 +77,6 @@ export const catalogApi = makeClient<CatalogPaths>();
 
 /** Клієнт блоку `scheduling`. Типи згенеровані з contracts/scheduling.yaml. */
 export const schedulingApi = makeClient<SchedulingPaths>();
+
+/** Клієнт блоку `work-orders`. Типи згенеровані з contracts/work-orders.yaml. */
+export const workOrdersApi = makeClient<WorkOrdersPaths>();

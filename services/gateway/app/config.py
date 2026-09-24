@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         "vehicles": "http://localhost:8003",
         "catalog": "http://localhost:8004",
         "scheduling": "http://localhost:8005",
+        "work-orders": "http://localhost:8006",
     }
 
     # Звідки брати публічні ключі для перевірки токенів.
