@@ -263,3 +263,19 @@ async def test_race_loser_gets_409_not_500(
 
     assert response.status_code == 409
     assert "щойно зайняли" in response.json()["detail"]
+
+
+async def test_conflict_message_uses_business_timezone(client: AsyncClient, lift: str) -> None:
+    """Дошка показує місцевий час — повідомлення про конфлікт мусить казати те саме."""
+    kyiv_10 = "2031-07-01T10:00:00+03:00"
+    body = {
+        "bay_id": lift,
+        "customer_id": PETRENKO,
+        "starts_at": kyiv_10,
+        "ends_at": "2031-07-01T11:00:00+03:00",
+    }
+    await client.post("/scheduling/appointments", json=body)
+
+    clash = await client.post("/scheduling/appointments", json=body)
+    assert "з 01.07 10:00 до 01.07 11:00" in clash.json()["detail"]
+    assert "UTC" not in clash.json()["detail"]

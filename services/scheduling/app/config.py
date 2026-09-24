@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     vehicles_url: str = "http://localhost:8003"
     peers_timeout_seconds: float = 5.0
 
+    # Години в повідомленнях для людей («зайнятий з 10:00») — у поясі сервісу,
+    # а не UTC: автосервіс працює в одному місті. Дані в базі й API — завжди UTC.
+    business_timezone: str = "Europe/Kyiv"
+
     port: int = 8005
     debug: bool = False
 

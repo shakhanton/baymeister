@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import events, repository
 from app.api.auth import Principal, require
+from app.config import get_settings
 from app.db import get_session
 from app.models import Appointment as AppointmentModel
 from app.models import Bay as BayModel
@@ -92,7 +94,8 @@ def _event(a: AppointmentModel) -> dict[str, object]:
 
 
 def _hhmm(value: datetime) -> str:
-    return value.strftime("%d.%m %H:%M UTC")
+    local = value.astimezone(ZoneInfo(get_settings().business_timezone))
+    return local.strftime("%d.%m %H:%M")
 
 
 async def _bay_or_404(session: AsyncSession, bay_id: uuid.UUID) -> BayModel:
