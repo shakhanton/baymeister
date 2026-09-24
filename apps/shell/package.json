@@ -15,6 +15,7 @@
     "@baymeister/module-customers": "workspace:*",
     "@baymeister/module-identity": "workspace:*",
     "@baymeister/module-kit": "workspace:*",
+    "@baymeister/module-vehicles": "workspace:*",
     "@baymeister/ui": "workspace:*",
     "@tanstack/react-query": "^5.66.0",
     "lucide-react": "^0.474.0",

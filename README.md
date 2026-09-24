@@ -27,6 +27,10 @@ cd services/customers && cp .env.example .env && uv sync --group dev
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8001          # окремий термінал
 
+cd services/vehicles && cp .env.example .env && uv sync --group dev
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload --port 8003          # окремий термінал
+
 cd services/gateway && uv sync --group dev
 uv run uvicorn app.main:app --reload --port 8000          # окремий термінал
 ```
@@ -35,8 +39,8 @@ uv run uvicorn app.main:app --reload --port 8000          # окремий те�
 `services/identity/.env`). Дев-сервер Vite проксіює `/api` на gateway `:8000`.
 
 > Postgres створює бази блоків тільки на порожньому томі. Якщо том лишився
-> з часів, коли бази `identity` ще не було:
-> `docker compose exec postgres createdb -U baymeister identity`.
+> з часів, коли баз нових блоків ще не було:
+> `docker compose exec postgres createdb -U baymeister identity` (і так само `vehicles`).
 
 ## Структура
 
