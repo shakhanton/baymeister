@@ -18,6 +18,7 @@
     "@baymeister/module-kit": "workspace:*",
     "@baymeister/module-scheduling": "workspace:*",
     "@baymeister/module-vehicles": "workspace:*",
+    "@baymeister/module-work-orders": "workspace:*",
     "@baymeister/ui": "workspace:*",
     "@tanstack/react-query": "^5.66.0",
     "lucide-react": "^0.474.0",

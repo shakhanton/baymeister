@@ -5,6 +5,7 @@ import { customersModule } from '@baymeister/module-customers';
 import { identityModule } from '@baymeister/module-identity';
 import { schedulingModule } from '@baymeister/module-scheduling';
 import { vehiclesModule } from '@baymeister/module-vehicles';
+import { workOrdersModule } from '@baymeister/module-work-orders';
 
 /**
  * Реєстр модулів — єдине джерело правди про склад продукту.
@@ -25,16 +26,7 @@ import { vehiclesModule } from '@baymeister/module-vehicles';
 export const registry: AppModule[] = [
   // ── Операції ────────────────────────────────────────────────────────────
   schedulingModule,
-  {
-    id: 'work-orders',
-    title: 'Наряд-замовлення',
-    icon: 'clipboard-list',
-    status: 'planned',
-    nav: { group: 'operations', order: 20 },
-    permissions: ['work_orders.read'],
-    routes: [],
-    description: 'Ядро системи: роботи, деталі, статуси, хронометраж.',
-  },
+  workOrdersModule,
   {
     id: 'inspections',
     title: 'Огляди',

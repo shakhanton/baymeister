@@ -1,4 +1,5 @@
 import { Badge, Button } from '@baymeister/ui';
+import { Link } from 'react-router';
 import { useChangeStatus, type Appointment, type AppointmentStatus } from '../api';
 import { hhmm } from '../time';
 
@@ -72,6 +73,15 @@ export function AppointmentCard({
         <p role="alert" className="rounded-bm bg-danger-soft px-3 py-2 text-sm text-danger">
           {change.error.message}
         </p>
+      ) : null}
+
+      {appointment.status === 'arrived' && appointment.vehicle_id ? (
+        <Link
+          to={`/work-orders?new=1&customer=${appointment.customer_id}&vehicle=${appointment.vehicle_id}&appointment=${appointment.id}`}
+          className="inline-flex h-8 items-center justify-center rounded-bm bg-accent px-3 text-sm font-medium text-on-accent hover:bg-accent-hover"
+        >
+          Відкрити наряд
+        </Link>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
