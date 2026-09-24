@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     upstreams: dict[str, str] = {
         "identity": "http://localhost:8002",
         "customers": "http://localhost:8001",
+        "vehicles": "http://localhost:8003",
     }
 
     # Звідки брати публічні ключі для перевірки токенів.

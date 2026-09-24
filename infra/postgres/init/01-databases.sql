@@ -2,7 +2,7 @@
 -- всієї архітектури, і тримається вона саме тут.
 CREATE DATABASE customers OWNER baymeister;
 CREATE DATABASE identity  OWNER baymeister;
+CREATE DATABASE vehicles  OWNER baymeister;
 
 -- Далі, у міру появи блоків:
--- CREATE DATABASE vehicles   OWNER baymeister;
 -- CREATE DATABASE catalog    OWNER baymeister;
